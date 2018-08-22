@@ -1,4 +1,4 @@
---DROP FUNCTION public.gdi_RemoveTopoOverlaps(character varying, character varying, character varying, character varying, character varying, character varying);
+--DROP FUNCTION IF EXISTS public.gdi_RemoveTopoOverlaps(character varying, character varying, character varying, character varying, character varying, character varying);
 CREATE OR REPLACE FUNCTION public.gdi_RemoveTopoOverlaps(
     topo_name character varying,
     schema_name character varying,
@@ -41,8 +41,8 @@ $BODY$
           (
             SELECT
               r1.element_id face_id,
-              ST_GetFaceGeometry(''' || topo_name || ''', r1.element_id) AS face_geom,
-              TopoGeom_remElement(t1.' || topo_geom_column || ', ARRAY[r1.element_id, 3]::topology.TopoElement)
+              topology.ST_GetFaceGeometry(''' || topo_name || ''', r1.element_id) AS face_geom,
+              topology.TopoGeom_remElement(t1.' || topo_geom_column || ', ARRAY[r1.element_id, 3]::topology.TopoElement)
             FROM
               ' || topo_name  || '.relation r1 JOIN
               ' || topo_name  || '.relation r2 ON r1.element_id = r2.element_id JOIN
@@ -58,7 +58,7 @@ $BODY$
 
       sql = '
         SELECT
-          ST_RemEdgeModFace(''' || topo_name || ''', e.edge_id)
+          topology.ST_RemEdgeModFace(''' || topo_name || ''', e.edge_id)
         FROM
           ' || topo_name || '.edge_data e JOIN
           ' || topo_name || '.relation r1 ON e.left_face = r1.element_id JOIN
@@ -71,7 +71,7 @@ $BODY$
 
       sql = '
         SELECT
-          ST_RemoveIsoNode(''' || topo_name || ''', node_id)
+          topology.ST_RemoveIsoNode(''' || topo_name || ''', node_id)
         FROM
           ' || topo_name || '.relation r JOIN
           ' || topo_name || '.node n ON r.element_id = n.containing_face

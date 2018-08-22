@@ -41,7 +41,7 @@ $BODY$
       BEGIN
         EXECUTE '
           UPDATE ' || topo_name || '.topo_geom
-          SET ' || geom_column || '_topo = toTopoGeom(' || geom_column || ', ''' || topo_name || ''', 1, ' || topo_tolerance || ')
+          SET ' || geom_column || '_topo = topology.toTopoGeom(' || geom_column || ', ''' || topo_name || ''', 1, ' || topo_tolerance || ')
           WHERE polygon_id = ' || polygon.id || '
         ';
         EXECUTE 'SELECT gdi_CleanPolygonTopo(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'', ' || area_tolerance || ', ' || polygon.id || ')';
@@ -111,7 +111,7 @@ $BODY$
             ST_Multi(ST_Union(geom)) AS geom
           FROM
             (
-              SELECT ' || id_column || ' AS id, ST_GetFaceGeometry(''' || topo_name || ''', (GetTopoGeomElements(' || geom_column || '_topo))[1]) AS geom FROM ' || topo_name || '.topo_geom
+              SELECT ' || id_column || ' AS id, topology.ST_GetFaceGeometry(''' || topo_name || ''', (topology.GetTopoGeomElements(' || geom_column || '_topo))[1]) AS geom FROM ' || topo_name || '.topo_geom
             ) foo
           GROUP BY
             id

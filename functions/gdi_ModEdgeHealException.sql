@@ -8,7 +8,7 @@ $BODY$
 DECLARE
   node_id INTEGER;
 BEGIN
-  SELECT ST_ModEdgeHeal($1, $2 , $3) INTO node_id;
+  SELECT topology.ST_ModEdgeHeal($1, $2 , $3) INTO node_id;
   RETURN node_id;
 EXCEPTION WHEN others THEN
   RETURN 0;

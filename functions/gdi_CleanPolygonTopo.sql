@@ -19,7 +19,7 @@ $BODY$
     debug BOOLEAN = false;
   BEGIN
     -- Remove all edges without relations to faces
-    sql = 'SELECT ST_RemEdgeModFace(''' || topo_name || ''', edge_id) FROM ' || topo_name || '.edge_data WHERE right_face = 0 and left_face = 0';
+    sql = 'SELECT topology.ST_RemEdgeModFace(''' || topo_name || ''', edge_id) FROM ' || topo_name || '.edge_data WHERE right_face = 0 and left_face = 0';
     EXECUTE sql;
 
     -- query small closed faces of polygon with polygon_id (same start_ and end_node)
@@ -29,8 +29,8 @@ $BODY$
       FROM
         (
           SELECT
-            (GetTopoGeomElements(' || geom_column || '))[1] AS face_id,
-            ST_GetFaceGeometry(''' || topo_name || ''', (GetTopoGeomElements(' || geom_column || '))[1]) AS geom
+            (topology.GetTopoGeomElements(' || geom_column || '))[1] AS face_id,
+            topology.ST_GetFaceGeometry(''' || topo_name || ''', (topology.GetTopoGeomElements(' || geom_column || '))[1]) AS geom
           FROM
             ' || schema_name || '.' || table_name || '
           WHERE
@@ -64,13 +64,13 @@ $BODY$
 
       -- Entferne face von TopoGeom des features
       RAISE NOTICE 'Entferne zu kleines face % from Polygon with polygon_id %', small_face_id, polygon_id;
-      EXECUTE 'SELECT TopoGeom_remElement(' || geom_column || ', Array[' || small_face.face_id || ', 3]::topology.TopoElement) FROM ' || table_name || ' WHERE polygon_id = ' || polygon_id;
+      EXECUTE 'SELECT topology.TopoGeom_remElement(' || geom_column || ', Array[' || small_face.face_id || ', 3]::topology.TopoElement) FROM ' || table_name || ' WHERE polygon_id = ' || polygon_id;
 
       -- Entferne alle edges des face aus der Topology und damit auch das face
-      EXECUTE 'SELECT ST_RemEdgeModFace(''' || topo_name || ''', abs((ST_GetFaceEdges(''' || topo_name || ''', ' || small_face.face_id || ')).edge))';
+      EXECUTE 'SELECT topology.ST_RemEdgeModFace(''' || topo_name || ''', abs((topology.ST_GetFaceEdges(''' || topo_name || ''', ' || small_face.face_id || ')).edge))';
 
       FOREACH node_id IN ARRAY nodes LOOP
-        EXECUTE 'SELECT ST_RemoveIsoNode(''' || topo_name || ''', ' || node_id || ')';
+        EXECUTE 'SELECT topology.ST_RemoveIsoNode(''' || topo_name || ''', ' || node_id || ')';
       END LOOP;
     END LOOP;
 

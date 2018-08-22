@@ -58,8 +58,8 @@ $BODY$
               polygon_id,
               ' || gap.left_face  || ' AS face_id,
               ' || gap.num_edges || ' AS num_edges,
-              ST_GetFaceGeometry(''' || topo_name || ''', ' || gap.left_face || ') AS face_geom,
-              TopoGeom_addElement(' || topo_geom_column || ', ARRAY[' || gap.left_face || ', 3]::TopoElement)
+              topology.ST_GetFaceGeometry(''' || topo_name || ''', ' || gap.left_face || ') AS face_geom,
+              topology.TopoGeom_addElement(' || topo_geom_column || ', ARRAY[' || gap.left_face || ', 3]::topology.TopoElement)
             FROM
               ' || schema_name || '.' || table_name || '
             WHERE
@@ -69,7 +69,7 @@ $BODY$
       IF debug THEN RAISE NOTICE 'Execute sql to add the face: %', sql; END IF;
       EXECUTE sql;
 
-      sql = 'SELECT ST_RemEdgeModFace(''' || topo_name || ''', ' || gap.edge_id || ')';
+      sql = 'SELECT topology.ST_RemEdgeModFace(''' || topo_name || ''', ' || gap.edge_id || ')';
       IF debug THEN RAISE NOTICE 'Execute sql to remove edge: %', sql; END IF;
       EXECUTE sql;
 
@@ -78,4 +78,4 @@ $BODY$
   END;
 $BODY$
   LANGUAGE plpgsql VOLATILE COST 100;
-COMMENT ON FUNCTION gdi_closetopogaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING) IS 'Entfernt faces, die keine Relation zu Polygonen haben, also Lücken zwischen anderen darstellen und ordnet die Fläche dem benachbarten Face und damit Polygon zu, welches die längste Kante an der Lücke hat.';
+COMMENT ON FUNCTION gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING) IS 'Entfernt faces, die keine Relation zu Polygonen haben, also Lücken zwischen anderen darstellen und ordnet die Fläche dem benachbarten Face und damit Polygon zu, welches die längste Kante an der Lücke hat.';
