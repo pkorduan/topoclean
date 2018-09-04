@@ -1,4 +1,4 @@
---DROP FUNCTION IF EXISTS gdi_PreparePolygonTopo(character varying, character varying, character varying, character varying, character varying, integer, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION);
+--DROP FUNCTION IF EXISTS gdi_PreparePolygonTopo(character varying, character varying, character varying, character varying, character varying, integer, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, CHARACTER VARYING);
 CREATE OR REPLACE FUNCTION gdi_PreparePolygonTopo(
   topo_name CHARACTER VARYING,
   schema_name CHARACTER VARYING,
@@ -8,14 +8,16 @@ CREATE OR REPLACE FUNCTION gdi_PreparePolygonTopo(
   epsg_code INTEGER,
   distance_tolerance DOUBLE PRECISION,
   angle_tolerance DOUBLE PRECISION,
-  topo_tolerance DOUBLE PRECISION
+  topo_tolerance DOUBLE PRECISION,
+  area_tolerance DOUBLE PRECISION,
+  expression CHARACTER VARYING
 )
 RETURNS BOOLEAN AS
 $BODY$
   DECLARE
     sql text;
     result RECORD;
-    debug BOOLEAN = FALSE;
+    debug BOOLEAN = false;
   BEGIN
 
     -- Prüfe ob ein topo_name angegeben wurde
@@ -120,10 +122,11 @@ $BODY$
     EXECUTE 'DROP TABLE IF EXISTS ' || topo_name || '.removed_overlaps';
     EXECUTE '
       CREATE TABLE ' || topo_name || '.removed_overlaps (
-        polygon_id integer,
-        face_id integer,
+        removed_face_id integer,
+        from_polygon_id integer,
+        for_polygon_id integer,
         face_geom geometry(POLYGON, ' || epsg_code || '),
-        CONSTRAINT removed_overlaps_pkey PRIMARY KEY (polygon_id, face_id)
+        CONSTRAINT removed_overlaps_pkey PRIMARY KEY (removed_face_id, from_polygon_id, for_polygon_id)
       )
     ';
 
@@ -171,7 +174,11 @@ $BODY$
       (''Anzahl Flächen vorher'', (SELECT count(*) FROM ' || schema_name || '.' || table_name || '), ''Stück''),
       (''Anzahl Stützpunkte vorher'', (SELECT Sum(ST_NPoints(' || geom_column || ')) FROM ' || schema_name || '.' || table_name || '), ''Stück'')
     ';
-
+/*
+    Das hier fällt erstmal flach, weil die Geometrie vor der Vorverarbeitung noch invalid sein kann und jetzt nur für diese Verschneidung nicht vorab schon mal korrigiert werden soll
+    den Aufwand kann man betreiben wenn man an der Statistik interessiert ist wie viel Verschneidungsfäche sich durch die Vorverarbeitung ändert.
+    Man müsste die Ausgangsgeometrie noch mal separat zwischenspeichern und indizieren, damit die Verschneidung performant läuft.
+    Den Schritt lassen wir erstmal weg.
     RAISE NOTICE 'Calculate Intersections of original geometry in table intersections.';
     EXECUTE '
       INSERT INTO ' || topo_name || '.intersections (step, polygon_a_id, polygon_b_id, the_geom)
@@ -191,11 +198,11 @@ $BODY$
       ORDER BY
         a.gid, b.gid
     ';
-
-    RAISE NOTICE 'Create table % in topology schema % and prepare polygons.', table_name, topo_name;
+*/
+    IF debug THEN RAISE NOTICE 'Drop table topo_geom in topology schema % if exists.', topo_name; END IF;
     -- create working table for topological corrected polygons
     EXECUTE 'DROP TABLE IF EXISTS ' || topo_name || '.topo_geom';
-    EXECUTE '
+    sql = '
       CREATE TABLE ' || topo_name || '.topo_geom AS
       SELECT
         f.' || id_column || ',
@@ -211,29 +218,36 @@ $BODY$
         (
           SELECT
             ' || id_column || ',
-            ST_SimplifyPreserveTopology(
-              ST_CollectionExtract(
-                ST_MakeValid(
-                  ST_Transform(
-                    ST_GeometryN(
-                      ' || geom_column || ',
-                      generate_series(
-                        1,
-                        ST_NumGeometries(' || geom_column || ')
-                      )
-                    ),
-                    ' || epsg_code || '
-                  )
+            gdi_FilterRings(
+              ST_SimplifyPreserveTopology(
+                ST_CollectionExtract(
+                  ST_MakeValid(
+                    ST_Transform(
+                      ST_GeometryN(
+                        ' || geom_column || ',
+                        generate_series(
+                          1,
+                          ST_NumGeometries(' || geom_column || ')
+                        )
+                      ),
+                      ' || epsg_code || '
+                    )
+                  ),
+                  3
                 ),
-                3
+                ' || distance_tolerance || '
               ),
-              ' || distance_tolerance || '
+              ' || area_tolerance || '
             ) AS geom
           FROM
             ' || schema_name || '.' || table_name || '
+          WHERE ' || expression || '
         ) f
       ORDER BY ' || id_column || '
     ';
+    RAISE NOTICE 'Prepare polygons.';
+    IF debug THEN RAISE NOTICE 'Create and fill table %.topo_geom with prepared polygons with sql: %', topo_name, sql; END IF;
+    EXECUTE sql;
 
     IF debug THEN RAISE NOTICE 'Add columns polygon_id, %_topo, %_corrected_geom and indexes', table_name, table_name; END IF;
     BEGIN
@@ -251,7 +265,7 @@ $BODY$
     EXECUTE 'ALTER TABLE ' || schema_name || '.' || table_name || ' DROP COLUMN IF EXISTS ' || geom_column || '_topo_corrected';
     EXECUTE 'SELECT AddGeometryColumn(''' || schema_name || ''', ''' || table_name || ''', ''' || geom_column || '_topo_corrected'', ' || epsg_code || ', ''MultiPolygon'', 2)';
 
-    RAISE NOTICE 'Calculate intersections after polygon preparation in table intersections';
+    IF debug THEN RAISE NOTICE 'Calculate intersections after polygon preparation in table intersections'; END IF;
     EXECUTE '
       INSERT INTO ' || topo_name || '.intersections (step, polygon_a_id, polygon_b_id, the_geom)
       SELECT
@@ -304,13 +318,13 @@ $BODY$
       )
     ';
 
-    RAISE NOTICE 'Do NoseRemove and update topo_geom.';
+    IF debug THEN RAISE NOTICE 'Do NoseRemove and update topo_geom.'; END IF;
     EXECUTE '
       UPDATE ' || topo_name || '.topo_geom
       SET ' || geom_column || ' = gdi_NoseRemove(''' || topo_name || ''', polygon_id, ' || geom_column || ', ' || angle_tolerance || ', ' || distance_tolerance || ')
     ';
 
-    RAISE NOTICE 'Calculate Intersection after NoseRemove in table intersections.';
+    IF debug THEN RAISE NOTICE 'Calculate Intersection after NoseRemove in table intersections.'; END IF;
     EXECUTE '
       INSERT INTO ' || topo_name || '.intersections (step, polygon_a_id, polygon_b_id, the_geom)
       SELECT
@@ -366,4 +380,4 @@ $BODY$
   END;
 $BODY$
   LANGUAGE plpgsql VOLATILE COST 100;
-COMMENT ON FUNCTION gdi_preparepolygontopo(character varying, character varying, character varying, character varying, character varying, integer, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) IS 'Bereitet die Erzeugung einer Topologie vor in dem die Geometrien der betroffenen Tabelle zunächst in einzelne Polygone zerlegt, transformiert, valide und mit distance_tolerance vereinfacht werden. Die Polygone werden in eine temporäre Tabelle kopiert und dort eine TopGeom Spalte angelegt. Eine vorhandene Topologie und temporäre Tabelle mit gleichem Namen wird vorher gelöscht.';
+COMMENT ON FUNCTION gdi_preparepolygontopo(character varying, character varying, character varying, character varying, character varying, integer, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, CHARACTER VARYING) IS 'Bereitet die Erzeugung einer Topologie vor in dem die Geometrien der betroffenen Tabelle zunächst in einzelne Polygone zerlegt, transformiert, valide und mit distance_tolerance vereinfacht werden. Die Polygone werden in eine temporäre Tabelle kopiert und dort eine TopGeom Spalte angelegt. Eine vorhandene Topologie und temporäre Tabelle mit gleichem Namen wird vorher gelöscht.';

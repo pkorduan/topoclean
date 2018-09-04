@@ -1,4 +1,4 @@
---DROP FUNCTION IF EXISTS gdi_CreateTopo(character varying, character varying, character varying, character varying, INTEGER, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN, character varying);
+--DROP FUNCTION IF EXISTS gdi_CreateTopo(character varying, character varying, character varying, character varying, INTEGER, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN, character varying, BOOLEAN);
 CREATE OR REPLACE FUNCTION gdi_CreateTopo(
   schema_name CHARACTER VARYING,
   table_name character varying,
@@ -10,43 +10,95 @@ CREATE OR REPLACE FUNCTION gdi_CreateTopo(
   topo_tolerance DOUBLE PRECISION,
   area_tolerance DOUBLE PRECISION,
   prepare_topo BOOLEAN,
-  expression CHARACTER VARYING
+  expression CHARACTER VARYING,
+  debug BOOLEAN
 )
 RETURNS BOOLEAN AS
 $BODY$
   DECLARE
+    t integer = 0;
+    f integer = 0;
     sql text;
     polygon RECORD;
     topo_name CHARACTER VARYING = table_name || '_topo';
-    debug BOOLEAN = false;
+    start_time timestamptz;
+    delta_time double precision;
   BEGIN
 
     IF prepare_topo THEN
       -- Prepare the polygon topology
       IF debug THEN RAISE NOTICE 'Prepare Topology'; END IF;
-      EXECUTE 'SELECT gdi_PreparePolygonTopo(''' || topo_name || ''', ''' || schema_name || ''', ''' || table_name || ''', ''' || id_column || ''', ''' || geom_column || ''', ' || epsg_code || ', ' || distance_tolerance || ', ' || angle_toleracne || ', ' || topo_tolerance || ')';
+      EXECUTE 'SELECT gdi_PreparePolygonTopo(''' || topo_name || ''', ''' || schema_name || ''', ''' || table_name || ''', ''' || id_column || ''', ''' || geom_column || ''', ' || epsg_code || ', ' || distance_tolerance || ', ' || angle_toleracne || ', ' || topo_tolerance || ', ' || area_tolerance || ', ''' || expression || ''')';
     END IF;
 
     -- query polygons
     sql = '
-      SELECT polygon_id AS id
+      SELECT
+        ' || id_column || ' AS object_id,
+        polygon_id AS id
       FROM ' || topo_name || '.topo_geom
-      WHERE ' || expression || '
       ORDER BY polygon_id
     ';
-    IF debug THEN RAISE NOTICE 'Query objects for loop: %', sql; END IF;
+    IF debug THEN RAISE NOTICE 'Query prepared objects for topo generation with sql: %', sql; END IF;
     FOR polygon IN EXECUTE sql LOOP
-      RAISE NOTICE 'Create TopGeom for object with polygon_id = %', polygon.id;
+      RAISE NOTICE 'Create TopGeom for object % polygon %', polygon.object_id, polygon.id;
+      t = t + 1;
 
       BEGIN
+        start_time = clock_timestamp();
         EXECUTE '
           UPDATE ' || topo_name || '.topo_geom
           SET ' || geom_column || '_topo = topology.toTopoGeom(' || geom_column || ', ''' || topo_name || ''', 1, ' || topo_tolerance || ')
           WHERE polygon_id = ' || polygon.id || '
         ';
+        delta_time = 1000 * (extract(epoch from clock_timestamp()) - extract(epoch from start_time));
+        IF debug THEN RAISE NOTICE '- % ms Duration of toTopoGeom', lpad(round(delta_time)::text, 6, ' '); END IF; 
+
+        start_time = clock_timestamp();
         EXECUTE 'SELECT gdi_CleanPolygonTopo(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'', ' || area_tolerance || ', ' || polygon.id || ')';
+        delta_time = 1000 * (extract(epoch from clock_timestamp()) - extract(epoch from start_time));
+        IF debug THEN RAISE NOTICE '- % ms Duration of gdi_CleanPolygonTopo', lpad(round(delta_time)::text, 6, ' '); END IF; 
+
+        BEGIN
+          start_time = clock_timestamp();
+          EXECUTE 'SELECT gdi_RemoveTopoOverlaps(
+            ''' || topo_name || ''',
+            ''' || topo_name || ''',
+            ''topo_geom'',
+            ''polygon_id'',
+            ''' || geom_column || ''',
+            ''' || geom_column || '_topo''
+          )';
+          delta_time = 1000 * (extract(epoch from clock_timestamp()) - extract(epoch from start_time));
+          IF debug THEN RAISE NOTICE '- % ms Duration of gdi_RemoveTopoOverlaps', lpad(round(delta_time)::text, 6, ' '); END IF; 
+
+          start_time = clock_timestamp();
+          EXECUTE 'SELECT gdi_RemoveNodesBetweenEdges(''' || topo_name || ''')';
+          delta_time = 1000 * (extract(epoch from clock_timestamp()) - extract(epoch from start_time));
+          IF debug THEN RAISE NOTICE '- % ms Duration of gdi_RemoveNodesBetweenEdges', lpad(round(delta_time)::text, 6, ' '); END IF;
+
+          BEGIN
+            start_time = clock_timestamp();
+            EXECUTE 'SELECT gdi_CloseTopoGaps(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'')';
+            delta_time = 1000 * (extract(epoch from clock_timestamp()) - extract(epoch from start_time));
+            IF debug THEN RAISE NOTICE '- % ms Duration of gdi_CloseTopoGaps', lpad(round(delta_time)::text, 6, ' '); END IF;
+
+            start_time = clock_timestamp();
+            EXECUTE 'SELECT gdi_RemoveNodesBetweenEdges(''' || topo_name || ''')';
+            delta_time = 1000 * (extract(epoch from clock_timestamp()) - extract(epoch from start_time));
+            IF debug THEN RAISE NOTICE '- % ms Duration of gdi_RemoveNodesBetweenEdges', lpad(round(delta_time)::text, 6, ' '); END IF;
+
+          EXCEPTION WHEN OTHERS THEN
+            RAISE WARNING 'Closing of Gaps failed: %', SQLERRM;
+          END;
+
+        EXCEPTION WHEN OTHERS THEN
+          RAISE WARNING 'Removing of Overlaps failed: %', SQLERRM;
+        END;
+
       EXCEPTION WHEN OTHERS THEN
         RAISE WARNING 'Loading of record polygon_id: % failed: %', polygon.id, SQLERRM;
+        f = f + 1;
         EXECUTE '
           UPDATE ' || topo_name || '.topo_geom
           SET err_msg = ''' || SQLERRM || '''
@@ -56,18 +108,7 @@ $BODY$
 
     END LOOP;
 
-    BEGIN
-      EXECUTE 'SELECT gdi_RemoveTopoOverlaps(
-        ''' || topo_name || ''',
-        ''' || topo_name || ''',
-        ''topo_geom'',
-        ''' || id_column || ''',
-        ''' || geom_column || ''',
-        ''' || geom_column || '_topo''
-      )';
-    EXCEPTION WHEN OTHERS THEN
-      RAISE WARNING 'Removing of Overlaps failed: %', SQLERRM;
-    END;
+    RAISE NOTICE '% Polygons added to Topology % failed.', t, f;
 
     EXECUTE '
       INSERT INTO ' || topo_name || '.statistic (key, value, description) VALUES
@@ -78,14 +119,6 @@ $BODY$
       )
     ';
 
-    EXECUTE 'SELECT gdi_RemoveNodesBetweenEdges(''' || topo_name || ''')';
-
-    BEGIN
-      EXECUTE 'SELECT gdi_CloseTopoGaps(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'')';
-    EXCEPTION WHEN OTHERS THEN
-      RAISE WARNING 'Closing of Gaps failed: %', SQLERRM;
-    END;
-
     EXECUTE '
       INSERT INTO ' || topo_name || '.statistic (key, value, description) VALUES
       (
@@ -95,10 +128,8 @@ $BODY$
       )
     ';
 
-    EXECUTE 'SELECT gdi_RemoveNodesBetweenEdges(''' || topo_name || ''')';
-
     -- Zurückschreiben der korrigierten Geometrien in die Spalte geom_column_topo_corrected in der Originaltabelle
-    RAISE NOTICE 'Schreibe korrigierte Geometrie zurück in Tabelle der Ausgangsdaten: %.% Spalte: %_topo_corrected', schema_name, table_name , geom_column;
+    RAISE NOTICE 'Rewrite corrected geometry back to the original table: %.% Column: %_topo_corrected', schema_name, table_name , geom_column;
     EXECUTE '
       UPDATE
         ' || schema_name || '.' || table_name || ' AS alt
@@ -122,6 +153,7 @@ $BODY$
 
     EXECUTE 'CREATE INDEX ' || table_name || '_' || geom_column || '_topo_corrected_gist ON ' || schema_name || '.' || table_name || ' USING gist(' || geom_column || '_topo_corrected)';
 
+    RAISE NOTICE 'Calculate and log intersections of corrected geometries.';
     EXECUTE '
       INSERT INTO ' || topo_name || '.intersections (step, polygon_a_id, polygon_b_id, the_geom)
       SELECT
@@ -220,4 +252,7 @@ $BODY$
   END;
 $BODY$
   LANGUAGE plpgsql VOLATILE COST 100;
-COMMENT ON FUNCTION gdi_CreateTopo(character varying, character varying, character varying, character varying, INTEGER, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN, character varying) IS 'Erzeugt die Topologie <table_name>_topo der Tabelle <table_name> in der temporären Tabelle <table_name>_topo mit einer Toleranz von <tolerance> für alle Geometrie aus Spalte <geom_column>, die der Bedingung <expression> genügen. Ist <prepare_topo> false, wird PreparePolygonTopo nicht ausgeführt.';
+COMMENT ON FUNCTION gdi_CreateTopo(character varying, character varying, character varying, character varying, INTEGER, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN, character varying, BOOLEAN) IS 'Erzeugt die Topologie <table_name>_topo der Tabelle <table_name> in der temporären Tabelle <table_name>_topo mit einer Toleranz von <tolerance> für alle Geometrie aus Spalte <geom_column>, die der Bedingung <expression> genügen. Ist <prepare_topo> false, wird PreparePolygonTopo nicht ausgeführt.';
+-- nohup psql -U kvwmap -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', 25833, 0.1, 0.01, 0.001, 1, true, 'the_geom && ST_MakeBox2D(ST_MakePoint(235943.561, 5890641.864), ST_MakePoint(300755.045, 5953515.785))', false)" topo_test > ortsteile.log 2> ortsteile.err &
+
+--SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', 25833, 0.2, 0.01, 0.01, 1, true, 'the_geom && ST_SetSrid(ST_MakeBox2D(ST_MakePoint(11.28043, 53.41997), ST_MakePoint(11.52070, 53.64125)), 4326)', true)

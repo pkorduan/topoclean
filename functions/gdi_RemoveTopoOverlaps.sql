@@ -1,12 +1,13 @@
 --DROP FUNCTION IF EXISTS public.gdi_RemoveTopoOverlaps(character varying, character varying, character varying, character varying, character varying, character varying);
 CREATE OR REPLACE FUNCTION public.gdi_RemoveTopoOverlaps(
-    topo_name character varying,
-    schema_name character varying,
-    table_name character varying,
-    id_column character varying,
-    geom_column character varying,
-    topo_geom_column character varying)
-  RETURNS boolean AS
+  topo_name character varying,
+  schema_name character varying,
+  table_name character varying,
+  id_column character varying,
+  geom_column character varying,
+  topo_geom_column character varying
+)
+RETURNS boolean AS
 $BODY$
   DECLARE
     sql text;
@@ -30,17 +31,19 @@ $BODY$
     IF debug THEN RAISE NOTICE 'Finde sich überlappende faces in schema: % tabelle: % mit sql: %', schema_name, table_name, sql; END IF;
 
     FOR polygon IN EXECUTE sql LOOP
-      RAISE NOTICE 'Remove and log overlaping faces for polygon_id %', polygon.id;
+      IF debug THEN RAISE NOTICE 'Remove and log overlaping faces for polygon_id %', polygon.id; END IF;
       sql = '
-        INSERT INTO ' || topo_name || '.removed_overlaps (polygon_id, face_id, face_geom)
+        INSERT INTO ' || topo_name || '.removed_overlaps (removed_face_id, from_polygon_id, for_polygon_id, face_geom)
         SELECT
-          ' || polygon.id || ',
-          face_id,
+          removed_face_id,
+          from_polygon_id,
+          ' || polygon.id || ' AS for_polygon_id,
           face_geom
         FROM
           (
             SELECT
-              r1.element_id face_id,
+              r1.element_id removed_face_id,
+              t1.polygon_id from_polygon_id,
               topology.ST_GetFaceGeometry(''' || topo_name || ''', r1.element_id) AS face_geom,
               topology.TopoGeom_remElement(t1.' || topo_geom_column || ', ARRAY[r1.element_id, 3]::topology.TopoElement)
             FROM

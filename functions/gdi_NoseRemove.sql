@@ -28,7 +28,7 @@ DECLARE
   angle_in_point float;
   distance_to_next_point FLOAT;
 DECLARE
-  debug BOOLEAN = FALSE;
+  debug BOOLEAN = false;
 BEGIN
   -- input geometry or rather set as default for the output 
   newgeom := ingeom;
@@ -36,15 +36,15 @@ BEGIN
   IF debug THEN RAISE NOTICE 'Start function gdi_NoseRemoveCore'; END IF;
   -- check polygon
   if (select ST_GeometryType(ingeom)) = 'ST_Polygon' then
-    IF (SELECT debug) THEN RAISE NOTICE 'ingeom is of type ST_Polygon'; END IF;
+    IF (debug) THEN RAISE NOTICE 'ingeom is of type ST_Polygon'; END IF;
     IF (SELECT ST_NumInteriorRings(ingeom)) = 0 then
-      IF (SELECT debug) THEN RAISE NOTICE 'num interior ring is 0'; END IF;
+      IF (debug) THEN RAISE NOTICE 'num interior ring is 0'; END IF;
       --save the polygon boundary as a line
       lineusp := ST_Boundary(ingeom) as line;
       -- number of tags
       numpoints := ST_NumPoints(lineusp);
       IF (numpoints > 3) THEN
-        IF (SELECT debug) THEN RAISE NOTICE 'num points of the line: %', numpoints; END IF;
+        IF (debug) THEN RAISE NOTICE 'num points of the line: %', numpoints; END IF;
         -- default value of the loop indicates if the geometry has been changed 
         newb := true;  
         -- globale changevariable 
@@ -107,7 +107,7 @@ BEGIN
                 linenew := ST_RemovePoint(lineusp, point_id - 1);
 
                 IF linenew is not null THEN
-                  RAISE NOTICE '---> point % removed (%)', point_id, ST_AsText(removed_point_geom);
+                  if debug THEN RAISE NOTICE '---> point % removed (%)', point_id, ST_AsText(removed_point_geom); END IF;
                   EXECUTE '
                     INSERT INTO ' || topo_name || '.removed_spikes (polygon_id, geom) VALUES
                       (' || polygon_id || ', ''' || removed_point_geom::text || ''')
@@ -140,16 +140,16 @@ BEGIN
           newgeom :=  ST_BuildArea(lineusp) as geom;
           -- errorhandling
           IF newgeom is not null THEN
-            raise notice 'new geometry created!';
+            IF debug THEN RAISE NOTICE 'new geometry created!'; END IF;
           ELSE
             newgeom := ingeom;
-            raise notice '-------------- area could not be created !!! --------------';
+            RAISE NOTICE '-------------- area could not be created !!! --------------';
             testgeom := ST_AsText(lineusp);
             raise notice 'geometry %', testgeom;
           END IF; -- newgeom is not null
         END IF; -- geom has been changed
       ELSE
-        IF (SELECT debug) THEN RAISE NOTICE 'Break loop due to num points of the line is only %', numpoints; END IF;
+        IF (debug) THEN RAISE NOTICE 'Break loop due to num points of the line is only %', numpoints; END IF;
       END IF; -- ingeom has more than 3 points
     end if; -- ingeom has 0 interior rings
   end if; -- ingeom is of type ST_Polygon

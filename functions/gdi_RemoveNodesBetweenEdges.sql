@@ -34,7 +34,7 @@ $BODY$
         )
         SELECT count(*) FROM node_id_rows
       ' INTO num_nodes;
-      RAISE NOTICE 'Anzahl gelöschter Nodes: % ', num_nodes;
+      IF debug THEN RAISE NOTICE 'Anzahl gelöschter Nodes Between Edges: % ', num_nodes; END IF;
     END LOOP;
     RETURN TRUE;
   END;

@@ -10,9 +10,9 @@ $BODY$
     sql text;
     gap RECORD;
     num_edges INTEGER = 2;
-    debug BOOLEAN = FALSE;
+    debug BOOLEAN = false;
   BEGIN
-    RAISE NOTICE 'Closing TopoGaps';
+    IF debug THEN RAISE NOTICE 'Closing TopoGaps'; END IF;
 
     sql = '
       SELECT
@@ -44,7 +44,7 @@ $BODY$
     IF debug THEN RAISE NOTICE 'Find gaps in topology with sql: %', sql; END IF;
 
     FOR gap IN EXECUTE sql LOOP
-      RAISE NOTICE 'Close and log gap covert by % edges at face % by adding it to topogeom id %: % from face % and remove edge %', gap.num_edges, gap.left_face, gap.topogeo_id, gap.geom_topo, gap.right_face, gap.edge_id;
+      IF debug THEN RAISE NOTICE 'Close and log gap covert by % edges at face % by adding it to topogeom id %: % from face % and remove edge %', gap.num_edges, gap.left_face, gap.topogeo_id, gap.geom_topo, gap.right_face, gap.edge_id; END IF;
       sql = '
         INSERT INTO ' || topo_name || '.filled_gaps (polygon_id, face_id, num_edges, face_geom)
         SELECT
