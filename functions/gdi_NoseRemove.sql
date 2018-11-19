@@ -4,14 +4,14 @@
 * therewith you can delete long noses.
 * Have also a look at this post, related to the topic: https://gis.stackexchange.com/questions/173977/how-to-remove-spikes-in-polygons-with-postgis 
 */
---DROP FUNCTION IF EXISTS public.gdi_NoseRemoveCore(CHARACTER VARYING, INTEGER, geometry, double precision, double precision);
+-- DROP FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision);
 CREATE OR REPLACE FUNCTION public.gdi_NoseRemoveCore(
-  topo_name CHARACTER VARYING,
-  polygon_id INTEGER,
-  geometry,
-  angle_tolerance double precision,
-  distance_tolerance double precision)
-RETURNS geometry AS
+    topo_name character varying,
+    polygon_id integer,
+    geometry,
+    angle_tolerance double precision,
+    distance_tolerance double precision)
+  RETURNS geometry AS
 $BODY$
 DECLARE
   ingeom    alias for $3;
@@ -25,11 +25,14 @@ DECLARE
   changed boolean;
   point_id integer;
   numpoints integer;
-  angle_in_point float;
+  angle_in_point double precision;
+  angle_tolerance_arc double precision;
   distance_to_next_point FLOAT;
 DECLARE
   debug BOOLEAN = false;
 BEGIN
+
+  angle_tolerance_arc = angle_tolerance / 200 * PI();
   -- input geometry or rather set as default for the output 
   newgeom := ingeom;
 
@@ -43,7 +46,8 @@ BEGIN
       lineusp := ST_Boundary(ingeom) as line;
       -- number of tags
       numpoints := ST_NumPoints(lineusp);
-      IF (numpoints > 3) THEN
+      IF (numpoints > 4) THEN
+        -- it has more vertex as a triangle which have 4 points (last ist identitcally with first point)
         IF (debug) THEN RAISE NOTICE 'num points of the line: %', numpoints; END IF;
         -- default value of the loop indicates if the geometry has been changed 
         newb := true;  
@@ -58,6 +62,7 @@ BEGIN
           point_id := 1;
           numpoints := ST_NumPoints(lineusp) - 1;
           IF (numpoints > 3) THEN
+            -- it has more vertex as a triangle which have 4 points (here counted reduced by 1)
             -- the geometry passes pointwisely until spike has been found and point removed
             WHILE (point_id <= numpoints) AND (remove_point = false) LOOP
               -- the check of the angle at the current point of a spike including the special case, that it is the first point.
@@ -67,7 +72,7 @@ BEGIN
                     pi() -
                     abs(
                       ST_Azimuth(
-                        ST_PointN(lineusp, case when point_id = 1 then ST_NumPoints(lineusp) - 1 else point_id - 1 end), 
+                        ST_PointN(lineusp, case when point_id = 1 then -2 else point_id - 1 end), 
                         ST_PointN(lineusp, point_id)
                       ) -
                       ST_Azimuth(
@@ -87,10 +92,10 @@ BEGIN
                 point_id,
                 distance_to_next_point,
                 angle_in_point,
-                case when point_id = 1 then ST_NumPoints(lineusp) - 1 else point_id - 1 end,
-                ST_AsText(ST_PointN(lineusp, case when point_id = 1 then ST_NumPoints(lineusp) - 1 else point_id - 1 end)),
+                case when point_id = 1 then numpoints else point_id - 1 end,
+                ST_AsText(ST_PointN(lineusp, case when point_id = 1 then -2 else point_id - 1 end)),
                 ST_Azimuth(
-                  ST_PointN(lineusp, case when point_id = 1 then ST_NumPoints(lineusp) - 1 else point_id - 1 end), 
+                  ST_PointN(lineusp, case when point_id = 1 then -2 else point_id - 1 end), 
                   ST_PointN(lineusp, point_id)
                 ),
                 point_id,
@@ -101,10 +106,10 @@ BEGIN
                 );
               END IF;
 
-              IF angle_in_point < angle_tolerance OR distance_to_next_point < distance_tolerance then
+              IF angle_in_point < angle_tolerance_arc OR distance_to_next_point < distance_tolerance then
                 -- remove point
-                removed_point_geom = ST_PointN(lineusp, point_id + 1);
-                linenew := ST_RemovePoint(lineusp, point_id - 1);
+                removed_point_geom = ST_PointN(lineusp, point_id); -- ST_PointN is 1 based
+                linenew := ST_RemovePoint(lineusp, point_id - 1); -- ST_RemovePoint is 0 based
 
                 IF linenew is not null THEN
                   if debug THEN RAISE NOTICE '---> point % removed (%)', point_id, ST_AsText(removed_point_geom); END IF;
@@ -117,7 +122,9 @@ BEGIN
 
                   -- if the first point is concerned, the last point must also be changed to close the line again.
                   IF point_id = 1 THEN
-                    linenew := ST_SetPoint(lineusp, numpoints - 2, ST_PointN(lineusp, 1));
+                    -- first point of lineusp is yet at former position 2
+                    -- replace last point by new first point 
+                    linenew := ST_SetPoint(lineusp, -1, ST_StartPoint(lineusp)); -- ST_SetPoint is 0-based
                     lineusp := linenew;
                   END IF;
                 END IF;
@@ -137,6 +144,11 @@ BEGIN
 
         --with the change it is tried to change back the new line geometry in a polygon. if this is not possible, the existing geometry is used
         IF changed = true then
+          IF debug THEN RAISE NOTICE 'New line geom %', ST_AsText(lineusp); END IF;
+          IF NOT ST_IsClosed(lineusp) THEN
+            RAISE NOTICE '---> Close non-closed line by adding StartPoint % at the end of the line.', ST_AsText(ST_StartPoint(lineusp));
+            lineusp = ST_AddPoint(lineusp, ST_StartPoint(lineusp));
+          END IF;
           newgeom :=  ST_BuildArea(lineusp) as geom;
           -- errorhandling
           IF newgeom is not null THEN
@@ -157,7 +169,12 @@ BEGIN
   RETURN newgeom;
 END;
 $BODY$
-LANGUAGE plpgsql VOLATILE COST 100;
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+ALTER FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision)
+  OWNER TO kvwmap;
+COMMENT ON FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision) IS 'Entfernt schmale Nasen und Kerben in der Umrandung von Polygonen durch abwechslendes Löschen von Punkten mit Abständen < <distance_tolerance> und von Scheitelpunkten mit spitzen Winkeln < <angle_tolerance> in Gon';
+
 COMMENT ON FUNCTION gdi_NoseRemoveCore(CHARACTER VARYING, INTEGER, geometry, double precision, double precision) IS 'Entfernt schmale Nasen und Kerben in der Umrandung von Polygonen durch abwechslendes Löschen von Punkten mit Abständen < <distance_tolerance> und von Scheitelpunkten mit spitzen Winkeln < <angle_tolerance> in arc';
 
 --DROP FUNCTION IF EXISTS public.gdi_NoseRemove(CHARACTER VARYING, INTEGER, geometry, double precision, double precision);
