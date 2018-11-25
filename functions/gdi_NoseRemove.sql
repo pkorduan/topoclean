@@ -4,13 +4,17 @@
 * therewith you can delete long noses.
 * Have also a look at this post, related to the topic: https://gis.stackexchange.com/questions/173977/how-to-remove-spikes-in-polygons-with-postgis 
 */
--- DROP FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision);
-CREATE OR REPLACE FUNCTION public.gdi_NoseRemoveCore(
+-- Function: public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision, boolean)
+
+-- DROP FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision, boolean);
+
+CREATE OR REPLACE FUNCTION public.gdi_noseremovecore(
     topo_name character varying,
     polygon_id integer,
     geometry,
     angle_tolerance double precision,
-    distance_tolerance double precision)
+    distance_tolerance double precision,
+    debug boolean)
   RETURNS geometry AS
 $BODY$
 DECLARE
@@ -28,8 +32,6 @@ DECLARE
   angle_in_point double precision;
   angle_tolerance_arc double precision;
   distance_to_next_point FLOAT;
-DECLARE
-  debug BOOLEAN = false;
 BEGIN
 
   angle_tolerance_arc = angle_tolerance / 200 * PI();
@@ -171,11 +173,7 @@ END;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
-ALTER FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision)
-  OWNER TO kvwmap;
-COMMENT ON FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision) IS 'Entfernt schmale Nasen und Kerben in der Umrandung von Polygonen durch abwechslendes Löschen von Punkten mit Abständen < <distance_tolerance> und von Scheitelpunkten mit spitzen Winkeln < <angle_tolerance> in Gon';
-
-COMMENT ON FUNCTION gdi_NoseRemoveCore(CHARACTER VARYING, INTEGER, geometry, double precision, double precision) IS 'Entfernt schmale Nasen und Kerben in der Umrandung von Polygonen durch abwechslendes Löschen von Punkten mit Abständen < <distance_tolerance> und von Scheitelpunkten mit spitzen Winkeln < <angle_tolerance> in arc';
+COMMENT ON FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision, boolean) IS 'Entfernt schmale Nasen und Kerben in der Umrandung von Polygonen durch abwechslendes Löschen von Punkten mit Abständen < <distance_tolerance> und von Scheitelpunkten mit spitzen Winkeln < <angle_tolerance> in Gon';
 
 --DROP FUNCTION IF EXISTS public.gdi_NoseRemove(CHARACTER VARYING, INTEGER, geometry, double precision, double precision);
 CREATE OR REPLACE FUNCTION public.gdi_NoseRemove(

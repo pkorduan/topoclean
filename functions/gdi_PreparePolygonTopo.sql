@@ -1,18 +1,19 @@
--- DROP FUNCTION public.gdi_preparepolygontopo(character varying, character varying, character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision);
+-- DROP FUNCTION public.gdi_preparepolygontopo(character varying, character varying, character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision, boolean);
 CREATE OR REPLACE FUNCTION public.gdi_preparepolygontopo(
-  topo_name character varying,
-  schema_name character varying,
-  table_name character varying,
-  id_column character varying,
-  geom_column character varying,
-  expression_column character varying,
-  expression character varying,
-  epsg_code integer,
-  distance_tolerance double precision,
-  angle_tolerance double precision,
-  topo_tolerance double precision,
-  area_tolerance double precision)
-RETURNS boolean AS
+    topo_name character varying,
+    schema_name character varying,
+    table_name character varying,
+    id_column character varying,
+    geom_column character varying,
+    expression_column character varying,
+    expression character varying,
+    epsg_code integer,
+    distance_tolerance double precision,
+    angle_tolerance double precision,
+    topo_tolerance double precision,
+    area_tolerance double precision,
+    debug boolean)
+  RETURNS boolean AS
 $BODY$
   DECLARE
     sql text;
@@ -21,7 +22,6 @@ $BODY$
     rec record;
     expression_select CHARACTER VARYING = '';
     expression_where CHARACTER VARYING = '';
-    debug BOOLEAN = TRUE;
   BEGIN
 
     -- Prüfe ob ein topo_name angegeben wurde
@@ -88,10 +88,8 @@ $BODY$
     END IF;
 
     -- CREATE TABLE for logging sql
-    if debug THEN RAISE NOTICE 'CREATE TABLE for logging sql'; END IF;
-
     EXECUTE 'DROP TABLE IF EXISTS sql_logs';
-    EXECUTE '
+    sql = '
       CREATE UNLOGGED TABLE sql_logs (
 				id serial,
 				func character varying,
@@ -100,6 +98,8 @@ $BODY$
         CONSTRAINT sql_log_pkey PRIMARY KEY (id)
       )
     ';
+		EXECUTE sql;
+    if debug THEN RAISE NOTICE 'CREATE TABLE for logging sql with sql: %', sql; END IF;
 
     -- drop topology
     IF debug THEN RAISE NOTICE 'Drop Topology: %', topo_name; END IF;
@@ -245,55 +245,125 @@ $BODY$
     EXECUTE 'DROP TABLE IF EXISTS ' || topo_name || '.topo_geom';
 
     sql = FORMAT ('
-      CREATE UNLOGGED TABLE %10$I.topo_geom AS
+      CREATE UNLOGGED TABLE %9$I.topo_geom AS
       SELECT
         %7$I,
-        %11$I,
-        gdi_noseRemove(''%10$s'', %7$I, %8$I, %3$s, %9$s) AS %1$I,
+        %10$s
+        gdi_noseRemove(''%9$s'', %7$I, %1$I, %3$s, %8$s, %12$L) AS %1$I,
         err_msg
       FROM
         (
           SELECT
             %7$I,
-            %11$I,
+            %10$s
             ST_GeometryN(
               geom,
               generate_series(
                 1,
                 ST_NumGeometries(geom)
               )
-            ) AS %8$s,
+            ) AS %1$s,
             ''''::CHARACTER VARYING AS err_msg
           FROM
             (
               SELECT
                 %7$I,
-                %11$I,
+                %10$s
                 gdi_FilterRings(
-                  ST_CollectionExtract(
-                    ST_MakeValid(
-                      ST_Transform(
-                        %1$I,
-                        %2$s
-                      )
+                  gdi_FingerCut(
+                    ST_CollectionExtract(
+                      ST_MakeValid(
+                        ST_Transform(
+                          %1$I,
+                          %2$s
+                        )
+                      ),
+                      3
                     ),
-                    3
+                    %8$L
                   ),
                   %3$s
                 ) AS geom
               FROM
                 %4$I.%5$I
-              WHERE
-                %11$I %6$s
+              %11$s
             ) foo
         ) bar
         WHERE
-          ST_Area(%8$I) > %3$s
-        ORDER BY %7$I
+          ST_Area(%1$I) > %3$s
       ',
-      geom_column, epsg_code, area_tolerance, schema_name, table_name, expression, id_column, geom_column, distance_tolerance, topo_name, expression_column
+      geom_column, epsg_code, area_tolerance, schema_name, table_name, expression, id_column, distance_tolerance, topo_name, expression_select, expression_where, debug
     );
-
+/*
+    sql = '
+      CREATE UNLOGGED TABLE ' || topo_name || '.topo_geom AS
+			SELECT '
+				|| id_column || ','
+        || expression_select_inner || '
+				ST_Buffer(
+					ST_Buffer(
+						ST_Buffer(
+							ST_Buffer('
+								|| geom_column || ',
+								-1 * ' || distance_tolerance || ',
+								''join=mitre mitre_limit=5''
+							),
+							' || distance_tolerance || ',
+							''join=mitre mitre_limit=5''
+						),
+						' || distance_tolerance || ',
+						''join=mitre mitre_limit=5''
+					),
+					-1 * ' || distance_tolerance || ',
+					''join=mitre mitre_limit=5''
+				)  AS ' || geom_column || '
+			FROM
+				(
+					SELECT
+						f.' || id_column || ','
+						|| expression_select_outer || '
+						ST_GeometryN(
+							f.geom,
+							generate_series(
+								1,
+								ST_NumGeometries(f.geom)
+							)
+						) AS ' || geom_column || ',
+						''''::CHARACTER VARYING AS err_msg
+					FROM
+						(
+							SELECT
+								' || id_column || ','
+								|| expression_select_inner || '
+								gdi_FilterRings(
+									ST_SimplifyPreserveTopology(
+										ST_CollectionExtract(
+											ST_MakeValid(
+												ST_Transform(
+													ST_GeometryN(
+														' || geom_column || ',
+														generate_series(
+															1,
+															ST_NumGeometries(' || geom_column || ')
+														)
+													),
+													' || epsg_code || '
+												)
+											),
+											3
+										),
+										' || distance_tolerance || '
+									),
+									' || area_tolerance || '
+								) AS geom
+							FROM
+								' || schema_name || '.' || table_name || ' a'
+								|| expression_where || '
+						) f
+				) parts
+      ORDER BY ' || id_column || '
+    ';
+*/
     IF true THEN RAISE NOTICE 'Create and fill table %.topo_geom with prepared polygons with sql: %', topo_name, sql; END IF;
     PERFORM logsql('PreparePolygonTopo', 'Make geometry valid, extract Polygons and simplify.', sql); EXECUTE sql;
 
@@ -384,7 +454,7 @@ $BODY$
     IF debug THEN RAISE NOTICE '%', msg; END IF;
     sql = '
       UPDATE ' || topo_name || '.topo_geom
-      SET ' || geom_column || ' = gdi_NoseRemove(''' || topo_name || ''', polygon_id, ' || geom_column || ', ' || angle_tolerance || ', ' || distance_tolerance || ')
+      SET ' || geom_column || ' = gdi_NoseRemove(''' || topo_name || ''', polygon_id, ' || geom_column || ', ' || angle_tolerance || ', ' || distance_tolerance || ', ' || debug || ')
     ';
     PERFORM logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
 
@@ -451,4 +521,4 @@ $BODY$
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
-COMMENT ON FUNCTION public.gdi_preparepolygontopo(character varying, character varying, character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision) IS 'Bereitet die Erzeugung einer Topologie vor in dem die Geometrien der betroffenen Tabelle zunächst in einzelne Polygone zerlegt, transformiert, valide und mit distance_tolerance vereinfacht werden. Die Polygone werden in eine temporäre Tabelle kopiert und dort eine TopGeom Spalte angelegt. Eine vorhandene Topologie und temporäre Tabelle mit gleichem Namen wird vorher gelöscht.';
+COMMENT ON FUNCTION public.gdi_preparepolygontopo(character varying, character varying, character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision, boolean) IS 'Bereitet die Erzeugung einer Topologie vor in dem die Geometrien der betroffenen Tabelle zunächst in einzelne Polygone zerlegt, transformiert, valide und mit distance_tolerance vereinfacht werden. Die Polygone werden in eine temporäre Tabelle kopiert und dort eine TopGeom Spalte angelegt. Eine vorhandene Topologie und temporäre Tabelle mit gleichem Namen wird vorher gelöscht.';
