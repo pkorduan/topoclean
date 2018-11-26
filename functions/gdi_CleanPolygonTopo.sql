@@ -1,5 +1,5 @@
---DROP FUNCTION IF EXISTS gdi_CleanPolygonTopo(character varying, character varying, character varying, character varying, DOUBLE PRECISION, INTEGER);
-CREATE OR REPLACE FUNCTION gdi_CleanPolygonTopo(
+--DROP FUNCTION IF EXISTS public.gdi_CleanPolygonTopo(character varying, character varying, character varying, character varying, DOUBLE PRECISION, INTEGER);
+CREATE OR REPLACE FUNCTION public.gdi_CleanPolygonTopo(
   topo_name CHARACTER VARYING,
   schema_name CHARACTER VARYING,
   table_name character varying,
@@ -78,4 +78,4 @@ $BODY$
   END;
 $BODY$
   LANGUAGE plpgsql VOLATILE COST 100;
-COMMENT ON FUNCTION gdi_CleanPolygonTopo(character varying, character varying, character varying, character varying, double precision, integer) IS 'Entfernt alle edges ohne Relation zu Polygonen (Ja das kann es geben bei der Erzeugung von TopoGeom.) und löscht Faces des Polygon mit polygon_id, die kleiner als die angegebene area_tolerance in Quadratmetern sind.';
+COMMENT ON FUNCTION public.gdi_CleanPolygonTopo(character varying, character varying, character varying, character varying, double precision, integer) IS 'Entfernt alle edges ohne Relation zu Polygonen (Ja das kann es geben bei der Erzeugung von TopoGeom.) und löscht Faces des Polygon mit polygon_id, die kleiner als die angegebene area_tolerance in Quadratmetern sind.';

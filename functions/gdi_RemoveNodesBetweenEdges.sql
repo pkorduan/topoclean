@@ -1,5 +1,5 @@
---DROP FUNCTION gdi_RemoveNodesBetweenEdges(CHARACTER VARYING);
-CREATE OR REPLACE FUNCTION gdi_RemoveNodesBetweenEdges(
+--DROP FUNCTION public.gdi_RemoveNodesBetweenEdges(CHARACTER VARYING);
+CREATE OR REPLACE FUNCTION public.gdi_RemoveNodesBetweenEdges(
   topo_name CHARACTER VARYING
 )
 RETURNS BOOLEAN AS
@@ -40,4 +40,4 @@ $BODY$
   END;
 $BODY$
   LANGUAGE plpgsql VOLATILE COST 100;
-COMMENT ON FUNCTION gdi_RemoveNodesBetweenEdges(CHARACTER VARYING) IS 'Die Funktion entfernt alle überflüssigen Knoten, die nur von zwei Kanten begrenzt werden, die selber kein eigenes Face bilden.';
+COMMENT ON FUNCTION public.gdi_RemoveNodesBetweenEdges(CHARACTER VARYING) IS 'Die Funktion entfernt alle überflüssigen Knoten, die nur von zwei Kanten begrenzt werden, die selber kein eigenes Face bilden.';

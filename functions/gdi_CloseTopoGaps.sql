@@ -1,5 +1,5 @@
---DROP FUNCTION IF EXISTS gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING);
-CREATE OR REPLACE FUNCTION gdi_CloseTopoGaps(
+--DROP FUNCTION IF EXISTS public.gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING);
+CREATE OR REPLACE FUNCTION public.gdi_CloseTopoGaps(
   topo_name CHARACTER VARYING,
   schema_name CHARACTER VARYING,
   table_name CHARACTER VARYING,
@@ -78,4 +78,4 @@ $BODY$
   END;
 $BODY$
   LANGUAGE plpgsql VOLATILE COST 100;
-COMMENT ON FUNCTION gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING) IS 'Entfernt faces, die keine Relation zu Polygonen haben, also Lücken zwischen anderen darstellen und ordnet die Fläche dem benachbarten Face und damit Polygon zu, welches die längste Kante an der Lücke hat.';
+COMMENT ON FUNCTION public.gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING) IS 'Entfernt faces, die keine Relation zu Polygonen haben, also Lücken zwischen anderen darstellen und ordnet die Fläche dem benachbarten Face und damit Polygon zu, welches die längste Kante an der Lücke hat.';

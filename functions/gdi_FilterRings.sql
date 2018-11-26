@@ -1,7 +1,7 @@
--- DROP FUNCTION gdi_FilterRings(geometry, double precision);
-CREATE OR REPLACE FUNCTION gdi_FilterRings(
-    geometry,
-    double precision
+-- DROP FUNCTION public.gdi_FilterRings(geometry, double precision);
+CREATE OR REPLACE FUNCTION public.gdi_FilterRings(
+  polygon geometry,
+  area_tolerance double precision
 )
 RETURNS geometry AS
 $BODY$
@@ -20,3 +20,4 @@ $BODY$
  $BODY$
   LANGUAGE sql IMMUTABLE
   COST 100;
+COMMENT ON FUNCTION public.gdi_FilterRings(geometry, DOUBLE PRECISION) IS 'Remove inner rings of polygon with area <= area_tolerance.'
