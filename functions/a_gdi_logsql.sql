@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION public.logsql(
+CREATE OR REPLACE FUNCTION public.gdi_logsql(
     func character varying,
     step character varying,
     sql text)

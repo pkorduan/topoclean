@@ -30,5 +30,4 @@ It uses the other functions
 * gdi_RemoveNodesBetweenEdges
 
 ### Example
-
-    gdi_CreateTopo('public', 'gemeinden_mv', 'gid', 'the_geom', 25833, 0.1, 0.01, 0.001, 1, true, 'true');
+see in sub directory examples

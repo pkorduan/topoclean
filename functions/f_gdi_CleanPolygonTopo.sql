@@ -1,13 +1,14 @@
---DROP FUNCTION IF EXISTS public.gdi_CleanPolygonTopo(character varying, character varying, character varying, character varying, DOUBLE PRECISION, INTEGER);
-CREATE OR REPLACE FUNCTION public.gdi_CleanPolygonTopo(
-  topo_name CHARACTER VARYING,
-  schema_name CHARACTER VARYING,
-  table_name character varying,
-  geom_column CHARACTER VARYING,
-  area_tolerance DOUBLE PRECISION,
-  polygon_id INTEGER
-)
-RETURNS BOOLEAN AS
+-- DROP FUNCTION public.gdi_cleanpolygontopo(character varying, character varying, character varying, character varying, double precision, integer, boolean);
+
+CREATE OR REPLACE FUNCTION public.gdi_cleanpolygontopo(
+    topo_name character varying,
+    schema_name character varying,
+    table_name character varying,
+    geom_column character varying,
+    area_tolerance double precision,
+    polygon_id integer,
+    debug boolean)
+  RETURNS boolean AS
 $BODY$
   DECLARE
     sql text;
@@ -16,11 +17,14 @@ $BODY$
     i INTEGER;
     node_id INTEGER;
     nodes INTEGER[];
-    debug BOOLEAN = false;
+		edges RECORD;
   BEGIN
+		IF debug THEN RAISE NOTICE 'CleanPolygonTopo for polygon_id: %', polygon_id; END IF;
     -- Remove all edges without relations to faces
-    sql = 'SELECT topology.ST_RemEdgeModFace(''' || topo_name || ''', edge_id) FROM ' || topo_name || '.edge_data WHERE right_face = 0 and left_face = 0';
-    EXECUTE sql;
+    sql = 'SELECT edge_id, topology.ST_RemEdgeModFace(''' || topo_name || ''', edge_id) FROM ' || topo_name || '.edge_data WHERE right_face = 0 and left_face = 0';
+    EXECUTE sql
+		INTO edges;
+		IF debug THEN RAISE NOTICE 'With ST_RemEdgeModFace removed edges: %', edges; END IF;
 
     -- query small closed faces of polygon with polygon_id (same start_ and end_node)
     sql = '
@@ -77,5 +81,7 @@ $BODY$
     RETURN TRUE;
   END;
 $BODY$
-  LANGUAGE plpgsql VOLATILE COST 100;
-COMMENT ON FUNCTION public.gdi_CleanPolygonTopo(character varying, character varying, character varying, character varying, double precision, integer) IS 'Entfernt alle edges ohne Relation zu Polygonen (Ja das kann es geben bei der Erzeugung von TopoGeom.) und löscht Faces des Polygon mit polygon_id, die kleiner als die angegebene area_tolerance in Quadratmetern sind.';
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+COMMENT ON FUNCTION public.gdi_cleanpolygontopo(character varying, character varying, character varying, character varying, double precision, integer, boolean) IS 'Entfernt alle edges ohne Relation zu Polygonen (Ja das kann es geben bei der Erzeugung von TopoGeom.) und löscht Faces des Polygon mit polygon_id, die kleiner als die angegebene area_tolerance in Quadratmetern sind.';
+

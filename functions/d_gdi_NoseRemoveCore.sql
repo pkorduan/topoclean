@@ -1,13 +1,4 @@
-/*
-* This function and gdi_NoseRemove is copied from https://trac.osgeo.org/postgis/wiki/UsersWikiExamplesSpikeRemover
-* but corrected and extended by distance tolerance so this function not only removes spikes but also small edges
-* therewith you can delete long noses.
-* Have also a look at this post, related to the topic: https://gis.stackexchange.com/questions/173977/how-to-remove-spikes-in-polygons-with-postgis 
-*/
--- Function: public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision, boolean)
-
 -- DROP FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision, boolean);
-
 CREATE OR REPLACE FUNCTION public.gdi_noseremovecore(
     topo_name character varying,
     polygon_id integer,
@@ -32,13 +23,14 @@ DECLARE
   angle_in_point double precision;
   angle_tolerance_arc double precision;
   distance_to_next_point FLOAT;
+  num_loop INTEGER;
 BEGIN
 
   angle_tolerance_arc = angle_tolerance / 200 * PI();
   -- input geometry or rather set as default for the output 
   newgeom := ingeom;
 
-  IF debug THEN RAISE NOTICE 'Start function gdi_NoseRemoveCore'; END IF;
+  IF debug THEN RAISE NOTICE 'Start function gdi_NoseRemoveCore für polygon_id %', polygon_id; END IF;
   -- check polygon
   if (select ST_GeometryType(ingeom)) = 'ST_Polygon' then
     IF (debug) THEN RAISE NOTICE 'ingeom is of type ST_Polygon'; END IF;
@@ -55,9 +47,10 @@ BEGIN
         newb := true;  
         -- globale changevariable 
         changed := false;
-
+				num_loop = 1;
         -- loop (to remove several points)
         WHILE newb = true loop
+					IF false THEN RAISE NOTICE 'Polygon_id: %, Durchlauf: %', polygon_id, num_loop; END IF;
           -- default values
           remove_point := false;
           newb := false;
@@ -90,7 +83,7 @@ BEGIN
                   ST_PointN(lineusp, point_id + 1)
                 )
               );
-              IF debug THEN RAISE NOTICE 'P: %, d: %, ß: %, a in P % (%): %, a in P % (%): %',
+              IF false THEN RAISE NOTICE 'P: %, d: %, ß: %, a in P % (%): %, a in P % (%): %',
                 point_id,
                 distance_to_next_point,
                 angle_in_point,
@@ -142,6 +135,7 @@ BEGIN
             point_id := 0;
             changed := true;
           END IF; -- point has been removed
+					num_loop = num_loop + 1;
         END LOOP; -- end of loop to remove several points
 
         --with the change it is tried to change back the new line geometry in a polygon. if this is not possible, the existing geometry is used
@@ -175,29 +169,3 @@ $BODY$
   COST 100;
 COMMENT ON FUNCTION public.gdi_noseremovecore(character varying, integer, geometry, double precision, double precision, boolean) IS 'Entfernt schmale Nasen und Kerben in der Umrandung von Polygonen durch abwechslendes Löschen von Punkten mit Abständen < <distance_tolerance> und von Scheitelpunkten mit spitzen Winkeln < <angle_tolerance> in Gon';
 
---DROP FUNCTION IF EXISTS public.gdi_NoseRemove(CHARACTER VARYING, INTEGER, geometry, double precision, double precision);
-CREATE OR REPLACE FUNCTION public.gdi_NoseRemove(
-  topo_name CHARACTER VARYING,
-  polygon_id INTEGER,
-  geometry,
-  angle double precision,
-  tolerance double precision)
-RETURNS geometry AS
-$BODY$ 
-  SELECT ST_MakePolygon(
-    (
-      --outer ring of polygon
-      SELECT ST_ExteriorRing(gdi_NoseRemoveCore($1, $2, geom, $4, $5)) as outer_ring
-      FROM ST_DumpRings($3)
-      where path[1] = 0 
-    ),
-    array(
-      --all inner rings
-      SELECT ST_ExteriorRing(gdi_NoseRemoveCore($1, $2, geom, $4, $5)) as inner_rings
-      FROM ST_DumpRings($3)
-      WHERE path[1] > 0
-    ) 
-) as geom
-$BODY$
-LANGUAGE sql IMMUTABLE COST 100;
-COMMENT ON FUNCTION gdi_NoseRemove(CHARACTER VARYING, INTEGER, geometry, double precision, double precision) IS 'Entfernt schmale Nasen und Kerben in Polygongeometrie durch Aufruf von der Funktion gdi_NoseRemoveCore für jeden inneren und äußeren Ring und anschließendes wieder zusammenfügen zu Polygon.';

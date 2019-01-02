@@ -90,3 +90,4 @@ $BODY$
 $BODY$
 LANGUAGE plpgsql VOLATILE COST 100;
 COMMENT ON FUNCTION public.gdi_RemoveTopoOverlaps(character varying, character varying, character varying, character varying, character varying, character varying) IS 'Entfernt Faces, die zu mehr als einer Topo-Geometrie zugeordnet sind durch Löschen der Face-Zuordnungen und schließlich dem Zuschlagen des Faces durch Löschen der Edges zwischen der Überlappung und der Fläche, der es zugeschlagen wird.';
+

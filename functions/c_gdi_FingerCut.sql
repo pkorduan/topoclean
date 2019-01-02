@@ -50,3 +50,4 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 COMMENT ON FUNCTION public.gdi_fingercut(geometry, double precision) IS 'Cut outer and inner finger of a multi or polygon with a given distance_tolerance.';
+

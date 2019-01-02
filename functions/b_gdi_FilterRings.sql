@@ -20,4 +20,5 @@ $BODY$
  $BODY$
   LANGUAGE sql IMMUTABLE
   COST 100;
-COMMENT ON FUNCTION public.gdi_FilterRings(geometry, DOUBLE PRECISION) IS 'Remove inner rings of polygon with area <= area_tolerance.'
+COMMENT ON FUNCTION public.gdi_FilterRings(geometry, DOUBLE PRECISION) IS 'Remove inner rings of polygon with area <= area_tolerance.';
+

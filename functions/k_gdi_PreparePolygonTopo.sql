@@ -1,4 +1,5 @@
 -- DROP FUNCTION public.gdi_preparepolygontopo(character varying, character varying, character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision, boolean);
+
 CREATE OR REPLACE FUNCTION public.gdi_preparepolygontopo(
     topo_name character varying,
     schema_name character varying,
@@ -91,14 +92,14 @@ $BODY$
     EXECUTE 'DROP TABLE IF EXISTS sql_logs';
     sql = '
       CREATE UNLOGGED TABLE sql_logs (
-				id serial,
-				func character varying,
+        id serial,
+        func character varying,
         step character varying,
         sql text,
         CONSTRAINT sql_log_pkey PRIMARY KEY (id)
       )
     ';
-		EXECUTE sql;
+    EXECUTE sql;
     if debug THEN RAISE NOTICE 'CREATE TABLE for logging sql with sql: %', sql; END IF;
 
     -- drop topology
@@ -109,17 +110,17 @@ $BODY$
         SELECT * FROM topology.topology WHERE name = ''' || topo_name || '''
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
 
     -- create topology
     if debug THEN RAISE NOTICE 'Create Topology: %', topo_name; END IF;
     sql = 'SELECT topology.CreateTopology(''' || topo_name || ''', '|| epsg_code || ', ' || topo_tolerance || ')';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
 
     -- CREATE UNLOGGED TABLEs for logging results
     if debug THEN RAISE NOTICE 'CREATE UNLOGGED TABLEs for logging results'; END IF;
     sql = 'DROP TABLE IF EXISTS ' || topo_name || '.intersections';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
     sql = '
       CREATE UNLOGGED TABLE ' || topo_name || '.intersections (
         step character varying,
@@ -129,10 +130,10 @@ $BODY$
         CONSTRAINT intersections_pkey PRIMARY KEY (step, polygon_a_id, polygon_b_id)
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
 
     sql = 'DROP TABLE IF EXISTS ' || topo_name || '.removed_spikes';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
     sql = '
       CREATE UNLOGGED TABLE ' || topo_name || '.removed_spikes (
         id serial,
@@ -141,10 +142,10 @@ $BODY$
         CONSTRAINT removed_spikes_pkey PRIMARY KEY (id)
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
 
     sql = 'DROP TABLE IF EXISTS ' || topo_name || '.removed_overlaps';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
     sql = '
       CREATE UNLOGGED TABLE ' || topo_name || '.removed_overlaps (
         removed_face_id integer,
@@ -154,10 +155,10 @@ $BODY$
         CONSTRAINT removed_overlaps_pkey PRIMARY KEY (removed_face_id, from_polygon_id, for_polygon_id)
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
 
     sql = 'DROP TABLE IF EXISTS ' || topo_name || '.filled_gaps';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
     sql = '
       CREATE UNLOGGED TABLE ' || topo_name || '.filled_gaps (
         polygon_id integer,
@@ -167,10 +168,10 @@ $BODY$
         CONSTRAINT filled_gaps_pkey PRIMARY KEY (polygon_id, face_id)
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
 
     sql = 'DROP TABLE IF EXISTS ' || topo_name || '.statistic';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
     sql = '
       CREATE UNLOGGED TABLE ' || topo_name || '.statistic (
         nr serial,
@@ -180,10 +181,10 @@ $BODY$
         CONSTRAINT statistic_pkey PRIMARY KEY (nr)
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
 
     sql = 'DROP TABLE IF EXISTS ' || topo_name || '.removed_nodes';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
     sql = '
       CREATE UNLOGGED TABLE ' || topo_name || '.removed_nodes (
         node_id integer,
@@ -191,12 +192,12 @@ $BODY$
         CONSTRAINT removed_nodes_pkey PRIMARY KEY (node_id)
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Prepare Tables', sql); EXECUTE sql;
 
     IF expression_column IS NOT NULL THEN
-			IF expression_column NOT IN (id_column, geom_column, 'err_msg') THEN
-				expression_select = expression_column || ',';
-			END IF;
+      IF expression_column NOT IN (id_column, geom_column, 'err_msg') THEN
+        expression_select = expression_column || ',';
+      END IF;
       expression_where = ' WHERE ' || expression_column || ' ' || expression;
     END IF;
 
@@ -213,7 +214,7 @@ $BODY$
       , (''Anzahl Flächen vorher'', (SELECT count(*) FROM ' || schema_name || '.' || table_name || ' a' || expression_where || '), ''Stück'')
       , (''Anzahl Stützpunkte vorher'', (SELECT Sum(ST_NPoints(' || geom_column || ')) FROM ' || schema_name || '.' || table_name || ' a' || expression_where || '), ''Stück'')
     ';
-    PERFORM logsql('PreparePolygonTopo', 'Insert Statistic', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Insert Statistic', sql); EXECUTE sql;
 /*
     Das hier fällt erstmal flach, weil die Geometrie vor der Vorverarbeitung noch invalid sein kann und jetzt nur für diese Verschneidung nicht vorab schon mal korrigiert werden soll
     den Aufwand kann man betreiben wenn man an der Statistik interessiert ist wie viel Verschneidungsfäche sich durch die Vorverarbeitung ändert.
@@ -249,7 +250,7 @@ $BODY$
       SELECT
         %7$I,
         %10$s
-        gdi_noseRemove(''%9$s'', %7$I, %1$I, %3$s, %8$s, %12$L) AS %1$I,
+        %1$I,
         err_msg
       FROM
         (
@@ -262,7 +263,7 @@ $BODY$
                 1,
                 ST_NumGeometries(geom)
               )
-            ) AS %1$s,
+            ) AS %1$I,
             ''''::CHARACTER VARYING AS err_msg
           FROM
             (
@@ -273,9 +274,12 @@ $BODY$
                   gdi_FingerCut(
                     ST_CollectionExtract(
                       ST_MakeValid(
-                        ST_Transform(
-                          %1$I,
-                          %2$s
+                         ST_SimplifyPreserveTopology(
+                          ST_Transform(
+                            %1$I,
+                            %2$s
+                          ),
+                          %8$L
                         )
                       ),
                       3
@@ -291,105 +295,38 @@ $BODY$
         ) bar
         WHERE
           ST_Area(%1$I) > %3$s
+        ORDER BY
+          %7$I 
       ',
       geom_column, epsg_code, area_tolerance, schema_name, table_name, expression, id_column, distance_tolerance, topo_name, expression_select, expression_where, debug
     );
-/*
-    sql = '
-      CREATE UNLOGGED TABLE ' || topo_name || '.topo_geom AS
-			SELECT '
-				|| id_column || ','
-        || expression_select_inner || '
-				ST_Buffer(
-					ST_Buffer(
-						ST_Buffer(
-							ST_Buffer('
-								|| geom_column || ',
-								-1 * ' || distance_tolerance || ',
-								''join=mitre mitre_limit=5''
-							),
-							' || distance_tolerance || ',
-							''join=mitre mitre_limit=5''
-						),
-						' || distance_tolerance || ',
-						''join=mitre mitre_limit=5''
-					),
-					-1 * ' || distance_tolerance || ',
-					''join=mitre mitre_limit=5''
-				)  AS ' || geom_column || '
-			FROM
-				(
-					SELECT
-						f.' || id_column || ','
-						|| expression_select_outer || '
-						ST_GeometryN(
-							f.geom,
-							generate_series(
-								1,
-								ST_NumGeometries(f.geom)
-							)
-						) AS ' || geom_column || ',
-						''''::CHARACTER VARYING AS err_msg
-					FROM
-						(
-							SELECT
-								' || id_column || ','
-								|| expression_select_inner || '
-								gdi_FilterRings(
-									ST_SimplifyPreserveTopology(
-										ST_CollectionExtract(
-											ST_MakeValid(
-												ST_Transform(
-													ST_GeometryN(
-														' || geom_column || ',
-														generate_series(
-															1,
-															ST_NumGeometries(' || geom_column || ')
-														)
-													),
-													' || epsg_code || '
-												)
-											),
-											3
-										),
-										' || distance_tolerance || '
-									),
-									' || area_tolerance || '
-								) AS geom
-							FROM
-								' || schema_name || '.' || table_name || ' a'
-								|| expression_where || '
-						) f
-				) parts
-      ORDER BY ' || id_column || '
-    ';
-*/
+
     IF true THEN RAISE NOTICE 'Create and fill table %.topo_geom with prepared polygons with sql: %', topo_name, sql; END IF;
-    PERFORM logsql('PreparePolygonTopo', 'Make geometry valid, extract Polygons and simplify.', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Make geometry valid, extract Polygons and simplify.', sql); EXECUTE sql;
 
     IF debug THEN RAISE NOTICE 'Add columns polygon_id, %_topo, %_corrected_geom and indexes', table_name, table_name; END IF;
     BEGIN
       sql = 'CREATE INDEX ' || table_name || '_' || geom_column ||'_gist ON ' || schema_name || '.' || table_name || ' USING gist(' || geom_column || ')';
-      PERFORM logsql('PreparePolygonTopo', 'Create gist index.', sql); EXECUTE sql;
+      PERFORM gdi_logsql('PreparePolygonTopo', 'Create gist index.', sql); EXECUTE sql;
     EXCEPTION
       WHEN duplicate_table
       THEN RAISE NOTICE 'Index: %_%_gist on table: % already exists, skipping!', table_name, geom_column, table_name;
     END;
     sql = 'ALTER TABLE ' || topo_name || '.topo_geom ADD COLUMN polygon_id serial NOT NULL';
-    PERFORM logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
     sql = 'ALTER TABLE ' || topo_name || '.topo_geom ADD CONSTRAINT ' || table_name || '_topo_pkey PRIMARY KEY (polygon_id)';
-    PERFORM logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
     sql = 'CREATE INDEX topo_geom_' || id_column || '_idx ON ' || topo_name || '.topo_geom USING btree (' || id_column || ')';
-    PERFORM logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
     sql = 'CREATE INDEX topo_geom_' || geom_column || '_gist ON ' || topo_name || '.topo_geom USING gist(' || geom_column || ')';
-    PERFORM logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
     sql = 'SELECT AddTopoGeometryColumn(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'', ''Polygon'')';
-    PERFORM logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
     IF debug THEN RAISE NOTICE 'Drop column %_topo_corrected if exists!', geom_column; END IF; 
     sql = 'ALTER TABLE ' || schema_name || '.' || table_name || ' DROP COLUMN IF EXISTS ' || geom_column || '_topo_corrected';
-    PERFORM logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
     sql = 'SELECT AddGeometryColumn(''' || schema_name || ''', ''' || table_name || ''', ''' || geom_column || '_topo_corrected'', ' || epsg_code || ', ''MultiPolygon'', 2)';
-    PERFORM logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
 
     msg = 'Calculate intersections after polygon preparation in table intersections.';
     IF debug THEN RAISE NOTICE '%', msg; END IF;
@@ -411,7 +348,7 @@ $BODY$
       ORDER BY
         a.polygon_id, b.polygon_id
     ';
-    PERFORM logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
 
     msg = 'Calculate area of overlapping polygons and write into statistic table.';
     sql = '
@@ -436,7 +373,7 @@ $BODY$
       ), (
         ''Anzahl der Polygone'', (SELECT count(*) FROM ' || topo_name || '.topo_geom), ''Stück'')
     ';
-    PERFORM logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
 
     msg = 'Calculate area difference.';
     sql = '
@@ -448,7 +385,7 @@ $BODY$
         ''m2''
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
 
     msg = 'Do NoseRemove and update topo_geom.';
     IF debug THEN RAISE NOTICE '%', msg; END IF;
@@ -456,7 +393,7 @@ $BODY$
       UPDATE ' || topo_name || '.topo_geom
       SET ' || geom_column || ' = gdi_NoseRemove(''' || topo_name || ''', polygon_id, ' || geom_column || ', ' || angle_tolerance || ', ' || distance_tolerance || ', ' || debug || ')
     ';
-    PERFORM logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
 
     msg = 'Calculate Intersection after NoseRemove in table intersections.';
     IF debug THEN RAISE NOTICE '%', msg; END IF;
@@ -478,7 +415,7 @@ $BODY$
       ORDER BY
         a.polygon_id, b.polygon_id
     ';
-    PERFORM logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
 
     msg = 'Calc overlap after noseRemove.';
     sql = '
@@ -502,7 +439,7 @@ $BODY$
         ''ha''
       )
     ';
-    PERFORM logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
 
     msg = 'Calculate Area difference.';
     sql = '
@@ -514,7 +451,7 @@ $BODY$
         ''m2''
       );
     ';
-    PERFORM logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
+    PERFORM gdi_logsql('PreparePolygonTopo', msg, sql); EXECUTE sql;
 
     RETURN TRUE;
   END;
@@ -522,3 +459,4 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 COMMENT ON FUNCTION public.gdi_preparepolygontopo(character varying, character varying, character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision, boolean) IS 'Bereitet die Erzeugung einer Topologie vor in dem die Geometrien der betroffenen Tabelle zunächst in einzelne Polygone zerlegt, transformiert, valide und mit distance_tolerance vereinfacht werden. Die Polygone werden in eine temporäre Tabelle kopiert und dort eine TopGeom Spalte angelegt. Eine vorhandene Topologie und temporäre Tabelle mit gleichem Namen wird vorher gelöscht.';
+

@@ -16,3 +16,4 @@ END;
 $BODY$
 LANGUAGE plpgsql VOLATILE COST 100;
 COMMENT ON FUNCTION public.gdi_ModEdgeHealException(character varying, integer, integer) IS 'Führt zwei benachbarte Kanten zu einer zusammen, wenn von dem Knoten dazwischen keine weiter';
+
