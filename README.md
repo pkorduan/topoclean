@@ -29,5 +29,9 @@ It uses the other functions
 * gdi_CleanPolygonTopo
 * gdi_RemoveNodesBetweenEdges
 
+### Installation
+* Execute the create statements in the files in sub directory functions in alphabetic order
+* File topoClean.sql contain all function create statements in the right order at once
+
 ### Example
 see in sub directory examples
