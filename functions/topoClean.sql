@@ -1098,7 +1098,7 @@ $BODY$
     IF i < 4 THEN
       factor = CASE
         WHEN i = 2 THEN 1.5
-        WHEN i = 3 THEN -1.5
+        WHEN i = 3 THEN 0.5
         ELSE 1.0
       END;
       msg = FORMAT('%s. try to add geometry of polygon_id: %s to topology.', i, polygon_id);
