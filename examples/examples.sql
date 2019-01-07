@@ -37,7 +37,7 @@ SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', NULL, 25833, 0.2
 
 -- Ausführung auf Konsole im Hintergrund
 psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', 'gid', 25833, 0.3, 6, 0.2, 1, true, FALSE, 'IN (3, 243, 1473, 2271, 2816)', FALSE, TRUE);" topo_test
-nohup psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', 'krs_schl', 25833, 0.2, 3, 0.2, 1, true, FALSE, '= ' || quote_literal('13074'), false);" topo_test > ortsteile.log 2> ortsteile.err &
+nohup psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', 'krs_schl', 25833, 0.3, 6, 0.2, 1, true, FALSE, '= ' || quote_literal('13074'), false, FALSE);" topo_test > ortsteile.log 2> ortsteile.err &
 nohup psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', NULL, 25833, 0.2, 6, 0.3, 1, true, FALSE, NULL, false, true);" topo_test > ortsteile.log 2> ortsteile.err &
 
 -- Abfrage der SQL-Statements

@@ -935,7 +935,7 @@ $BODY$
     PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
     sql = 'CREATE INDEX topo_geom_' || geom_column || '_gist ON ' || topo_name || '.topo_geom USING gist(' || geom_column || ')';
     PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
-    sql = 'SELECT AddTopoGeometryColumn(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'', ''Polygon'')';
+    sql = 'SELECT topology.AddTopoGeometryColumn(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'', ''Polygon'')';
     PERFORM gdi_logsql('PreparePolygonTopo', 'Alter topology table.', sql); EXECUTE sql;
     IF debug THEN RAISE NOTICE 'Drop column %_topo_corrected if exists!', geom_column; END IF; 
     sql = 'ALTER TABLE ' || schema_name || '.' || table_name || ' DROP COLUMN IF EXISTS ' || geom_column || '_topo_corrected';
