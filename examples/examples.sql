@@ -40,8 +40,12 @@ psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_ge
 nohup psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', 'krs_schl', 25833, 0.3, 6, 0.2, 1, true, FALSE, '= ' || quote_literal('13074'), false, FALSE);" topo_test > ortsteile.log 2> ortsteile.err &
 nohup psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', NULL, 25833, 0.2, 6, 0.3, 1, true, FALSE, NULL, false, true);" topo_test > ortsteile.log 2> ortsteile.err &
 
+-- Ausführen mit Scripten
+./cleantopo.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 true false "gid in (1026, 1593, 2786, 1161, 1058, 460)" true false
+nohup ./cleantopo.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 true false "gid in (1026, 1593, 2786, 1161, 1058, 460, 2785, 2849, 774, 2784)" true false > cleantopo.msg 2> cleantopo.err &
+nohup ./cleantopo.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 true false "krs = 13071" true false > cleantopo.msg 2> cleantopo.err &
+
 -- Abfrage der SQL-Statements
 SELECT sql || ';' FROM sql_logs;
-
 
 select polygon_id from ortsteile_topo.topo_geom order by polygon_id
