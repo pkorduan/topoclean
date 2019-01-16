@@ -1,4 +1,4 @@
--- DROP FUNCTION public.gdi_createtopo(character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision, boolean, boolean, character varying, boolean, boolean);
+-- DROP FUNCTION public.gdi_createtopo(character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision, double precision, boolean, boolean, character varying, boolean, boolean);
 CREATE OR REPLACE FUNCTION public.gdi_createtopo(
     schema_name character varying,
     table_name character varying,
@@ -10,6 +10,7 @@ CREATE OR REPLACE FUNCTION public.gdi_createtopo(
     angle_toleracne double precision,
     topo_tolerance double precision,
     area_tolerance double precision,
+    gap_area_tolerance double precision,
     prepare_topo boolean,
     only_prepare_topo boolean,
     expression character varying,
@@ -96,7 +97,7 @@ $BODY$
       BEGIN
         start_time = clock_timestamp();
         msg = 'Close Gaps.';
-        sql = 'SELECT gdi_CloseTopoGaps(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'')';
+        sql = 'SELECT gdi_CloseTopoGaps(''' || topo_name || ''', ''' || topo_name || ''', ''topo_geom'', ''' || geom_column || '_topo'', ' || gap_area_tolerance || ')';
         PERFORM gdi_logsql('CreateTopo', msg, sql); EXECUTE sql;
         delta_time = 1000 * (extract(epoch from clock_timestamp()) - extract(epoch from start_time));
         IF debug THEN RAISE NOTICE '- % ms Duration of gdi_CloseTopoGaps', lpad(round(delta_time)::text, 6, ' '); END IF;
@@ -259,5 +260,5 @@ $BODY$
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
-COMMENT ON FUNCTION public.gdi_createtopo(character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision, boolean, boolean, character varying, boolean, BOOLEAN) IS 'Erzeugt die Topologie <table_name>_topo der Tabelle <table_name> in der temporären Tabelle <table_name>_topo mit einer Toleranz von <tolerance> für alle Geometrie aus Spalte <geom_column>, die der Bedingung <expression> genügen. Ist <prepare_topo> false, wird PreparePolygonTopo nicht ausgeführt. Ist <only_prepare_topo> true wird nur die Topologie vorbereitet. Die Rückgabe ist die Anzahl von Polygonen, die nicht zur Topologie hinzugefügt werden konnte.';
+COMMENT ON FUNCTION public.gdi_createtopo(character varying, character varying, character varying, character varying, character varying, integer, double precision, double precision, double precision, double precision, double precision, boolean, boolean, character varying, boolean, BOOLEAN) IS 'Erzeugt die Topologie <table_name>_topo der Tabelle <table_name> in der temporären Tabelle <table_name>_topo mit einer Toleranz von <tolerance> für alle Geometrie aus Spalte <geom_column>, die der Bedingung <expression> genügen. Ist <prepare_topo> false, wird PreparePolygonTopo nicht ausgeführt. Ist <only_prepare_topo> true wird nur die Topologie vorbereitet. Die Rückgabe ist die Anzahl von Polygonen, die nicht zur Topologie hinzugefügt werden konnte.';
 

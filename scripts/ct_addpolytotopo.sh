@@ -10,12 +10,13 @@ distance_tolerance=$7
 angle_toleracne=$8
 topo_tolerance=$9
 area_tolerance=${10}
-prepare_topo=${11}
-only_prepare_topo=${12}
-expression="${13}"
-debug=${14}
-stop_on_error=${15}
-id=${16}
+gap_area_tolerance=${11}
+prepare_topo=${12}
+only_prepare_topo=${13}
+expression="${14}"
+debug=${15}
+stop_on_error=${16}
+id=${17}
 
 t=0
 f=0
@@ -33,6 +34,8 @@ log "Add Polygon ${id_column}: ${id} to Topology ${table_name}_topo."
 exec_sql "INSERT INTO ${table_name}_topo.topo_geom (${id_column}, ${geom_column})
 SELECT ${id_column}, gdi_cleanpolygon(${geom_column}, ${epsg_code}, ${distance_tolerance}, ${area_tolerance}) FROM ${schema_name}.${table_name} WHERE ${id_column} = ${id}"
 
+exec_sql "UPDATE ${table_name}_topo.topo_geom SET ${geom_column} = gdi_filterrings(gdi_noseremove('${table_name}_topo', polygon_id, the_geom, ${angle_tolerance}, ${distance_tolerance}, false), ${area_tolerance}) WHERE ${id_column} = ${id}"
+
 exec_sql "SELECT gdi_addtotopo('${table_name}_topo', '${geom_column}', ${topo_tolerance}, ${area_tolerance}, polygon_id, 0, 1, true) FROM ${table_name}_topo.topo_geom WHERE ${id_column} = ${id}"
 
 log "Entferne ${id} aus next Tabelle."
@@ -44,7 +47,7 @@ if [ -n "${result}" ] ; then
   log "Polygon mit ${id_column}: ${id} hat Fehler verursacht. Schreibe Fehlermeldung in Originaltabelle."
   exec_sql "UPDATE ${schema_name}.${table_name} SET ${geom_column}_msg = '${result}' WHERE ${id_column} = ${id}"
 else
-  exec_sql "SELECT gdi_CloseTopoGaps('${table_name}_topo', '${table_name}_topo', 'topo_geom', '${geom_column}_topo')"
+  exec_sql "SELECT gdi_CloseTopoGaps('${table_name}_topo', '${table_name}_topo', 'topo_geom', '${geom_column}_topo', ${gap_area_tolerance})"
   exec_sql "SELECT gdi_RemoveNodesBetweenEdges('${table_name}_topo')"
 
   log "Polygon mit ${id_column}: ${id} erfolgreich zur Topologie hinzugefügt."

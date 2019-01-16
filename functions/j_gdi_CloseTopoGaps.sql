@@ -1,9 +1,11 @@
---DROP FUNCTION IF EXISTS public.gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING);
+--DROP FUNCTION IF EXISTS public.gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, DOUBLE PRECISION);
 CREATE OR REPLACE FUNCTION public.gdi_CloseTopoGaps(
   topo_name CHARACTER VARYING,
   schema_name CHARACTER VARYING,
   table_name CHARACTER VARYING,
-  topo_geom_column CHARACTER VARYING)
+  topo_geom_column CHARACTER VARYING,
+  gap_area_tolerance DOUBLE PRECISION
+)
   RETURNS BOOLEAN AS
 $BODY$
   DECLARE
@@ -39,7 +41,10 @@ $BODY$
           ORDER BY left_face, length DESC
         ) gap JOIN
         ' || topo_name || '.relation r ON gap.right_face = r.element_id JOIN
-        ' || schema_name || '.' || table_name || ' g ON r.topogeo_id = (g.' || topo_geom_column || ').id 
+        ' || schema_name || '.' || table_name || ' g ON r.topogeo_id = (g.' || topo_geom_column || ').id JOIN
+        ' || topo_name || '.face f ON gap.left_face = f.face_id
+      WHERE
+        ST_Area(ST_GetFaceGeometry(''' || topo_name || ''', gap.left_face)) < 25000
     ';
     IF debug THEN RAISE NOTICE 'Find gaps in topology with sql: %', sql; END IF;
 
@@ -78,4 +83,4 @@ $BODY$
   END;
 $BODY$
   LANGUAGE plpgsql VOLATILE COST 100;
-COMMENT ON FUNCTION public.gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING) IS 'Entfernt faces, die keine Relation zu Polygonen haben, also Lücken zwischen anderen darstellen und ordnet die Fläche dem benachbarten Face und damit Polygon zu, welches die längste Kante an der Lücke hat.';
+COMMENT ON FUNCTION public.gdi_CloseTopoGaps(CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, CHARACTER VARYING, DOUBLE PRECISION) IS 'Entfernt faces < als gap_area_tolerance, die keine Relation zu Polygonen haben, also Lücken zwischen anderen darstellen und ordnet die Fläche dem benachbarten Face und damit Polygon zu, welches die längste Kante an der Lücke hat.';
