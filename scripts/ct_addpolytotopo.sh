@@ -38,7 +38,7 @@ exec_sql "SELECT gdi_addtotopo('${table_name}_topo', '${geom_column}', ${topo_to
 log "Entferne ${id} aus next Tabelle."
 exec_sql "DELETE FROM ${table_name}_topo.next WHERE id = '${id}'"
 
-exec_sql="SELECT string_agg(err_msg, ', ') FROM ${table_name}_topo.topo_geom WHERE ${id_column} = ${id} AND err_msg != ''"
+exec_sql "SELECT string_agg(err_msg, ', ') FROM ${table_name}_topo.topo_geom WHERE ${id_column} = ${id} AND err_msg != ''"
 
 if [ -n "${result}" ] ; then
   log "Polygon mit ${id_column}: ${id} hat Fehler verursacht. Schreibe Fehlermeldung in Originaltabelle."
