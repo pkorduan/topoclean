@@ -20,17 +20,6 @@ id=${17}
 # pid des Elternprozesses setzen
 pid=$PPID
 
-t=0
-f=0
-f_before=""
-sql=""
-topo_name="${table_name}_topo";
-start_time=`date`
-delta_time=0
-expression_where=""
-msg=""
-result=0
-
 log "Add Polygon ${id_column}: ${id} to Topology ${table_name}_topo."
 
 exec_sql "INSERT INTO ${table_name}_topo.topo_geom (${id_column}, ${geom_column})

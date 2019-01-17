@@ -39,7 +39,7 @@ usage() {
 }
 
 next_id() {
-  exec_sql "SELECT DISTINCT id, expression FROM ${table_name}_topo.next WHERE pid = ${pid} ORDER BY id LIMIT 1"
+  exec_sql "SELECT DISTINCT id, pid FROM ${table_name}_topo.next WHERE pid = ${pid} ORDER BY id LIMIT 1"
   if [ -z ${result} ]; then
     log "Nexttab is leer"
     exec_sql "SELECT ${id_column} FROM ${schema_name}.${table_name} WHERE ${expression} AND ${geom_column}_topo_corrected IS NULL AND ${geom_column}_msg IS NULL ORDER BY ${id_column} LIMIT 1"
@@ -63,7 +63,7 @@ fi
 
 if [ -z "${result}" ]; then
   log "Table ${table_name}_topo.topo_geom existiert nicht."
-  exec_sql "SELECT gdi_prepareTopo('${2}_topo', '$1', '$2', '$3', '$4', '$5', '${14}', $6, $7, $8, $9, ${10}, '${15}')"
+  exec_sql "SELECT gdi_prepareTopo('${2}_topo', '$1', '$2', '$3', '$4', '$5', '${14//\'/\'\'}', $6, $7, $8, $9, ${10}, '${15}')"
 else
   log "Topology ${table_name}_topo existiert bereits."
 fi

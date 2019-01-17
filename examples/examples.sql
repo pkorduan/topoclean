@@ -1,5 +1,5 @@
 ﻿/*
-  Die in createTopo zur Verfügung stehenden Parameter
+  Die in ct_start zur Verfügung stehenden Parameter
   schema_name Name des Schemas in dem die Datentabelle liegt.
   table_name Name der Tabelle in dem die Daten liegen.
   id_column Name der Spalte in der die eindeutige Nummerierung der Polygone ist.
@@ -42,9 +42,9 @@ nohup psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', '
 nohup psql -U postgres -c "SELECT gdi_CreateTopo('public', 'ortsteile', 'gid', 'the_geom', NULL, 25833, 0.2, 6, 0.3, 1, 25000, true, FALSE, NULL, false, true);" topo_test > ortsteile.log 2> ortsteile.err &
 
 -- Ausführen mit Scripten
-./cleantopo.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 25000 true false "gid in (1026, 1593, 2786, 1161, 1058, 460)" true false
-nohup ./cleantopo.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 25000 true false "gid in (1026, 1593, 2786, 1161, 1058, 460, 2785, 2849, 774, 2784)" true false > cleantopo.msg 2> cleantopo.err &
-nohup ./cleantopo.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 25000 true false "krs = 13071" true false > cleantopo.msg 2> cleantopo.err &
+./ct_loop.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 25000 true false "gid in (1026, 1593, 2786, 1161, 1058, 460)" true false
+nohup ./ct_start.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 25000 true false "gid in (1026, 1593, 2786, 1161, 1058, 460, 2785, 2849, 774, 2784)" true false > cleantopo.msg 2> cleantopo.err &
+nohup ./ct_loop.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 25000 true false "krs = 13071" true false > cleantopo.msg 2> cleantopo.err &
 
 -- Abfrage der SQL-Statements
 SELECT sql || ';' FROM sql_logs;
