@@ -1218,7 +1218,8 @@ $BODY$
     PERFORM gdi_logsql('preparetopo', 'Prepare Tables', sql); EXECUTE sql;
     sql = '
       CREATE UNLOGGED TABLE ' || topo_name || '.next (
-        id character varying
+        id character varying,
+        pid integer
       )
     ';
     PERFORM gdi_logsql('preparetopo', 'Prepare Tables', sql); EXECUTE sql;

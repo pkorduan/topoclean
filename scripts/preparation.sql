@@ -17,5 +17,5 @@ ORDER BY ST_Area(the_geom)
 LIMIT 1000
 
 -- Sicht der kleinen Teilflächen mit Geometrie zur Anzeige in QGIS
-create view small_topo_geom as
-select gid, polygon_id, the_geom, st_area(the_geom) from ortsteile_topo.topo_geom where st_area(the_geom) < 25000 ORDER BY st_area(the_geom)
+CREATE OR REPLACE VIEW small_topo_geom as
+SELECT gid, polygon_id, the_geom, st_area(the_geom) from ortsteile_topo.topo_geom where st_area(the_geom) < 25000 ORDER BY st_area(the_geom)

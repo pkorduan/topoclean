@@ -7,7 +7,7 @@ geom_column=$4
 expression_column=$5
 epsg_code=$6
 distance_tolerance=$7
-angle_toleracne=$8
+angle_tolerance=$8
 topo_tolerance=$9
 area_tolerance=${10}
 gap_area_tolerance=${11}
@@ -17,6 +17,8 @@ expression="${14}"
 debug=${15}
 stop_on_error=${16}
 id=${17}
+# pid des Elternprozesses setzen
+pid=$PPID
 
 t=0
 f=0
@@ -36,10 +38,10 @@ SELECT ${id_column}, gdi_cleanpolygon(${geom_column}, ${epsg_code}, ${distance_t
 
 exec_sql "UPDATE ${table_name}_topo.topo_geom SET ${geom_column} = gdi_filterrings(gdi_noseremove('${table_name}_topo', polygon_id, the_geom, ${angle_tolerance}, ${distance_tolerance}, false), ${area_tolerance}) WHERE ${id_column} = ${id}"
 
-exec_sql "SELECT gdi_addtotopo('${table_name}_topo', '${geom_column}', ${topo_tolerance}, ${area_tolerance}, polygon_id, 0, 1, true) FROM ${table_name}_topo.topo_geom WHERE ${id_column} = ${id}"
+exec_sql "SELECT gdi_addtotopo('${table_name}_topo', '${geom_column}', ${topo_tolerance}, ${area_tolerance}, polygon_id, 0, 1, false) FROM ${table_name}_topo.topo_geom WHERE ${id_column} = ${id}"
 
 log "Entferne ${id} aus next Tabelle."
-exec_sql "DELETE FROM ${table_name}_topo.next WHERE id = '${id}'"
+exec_sql "DELETE FROM ${table_name}_topo.next WHERE id = '${id}' AND pid = ${pid}"
 
 exec_sql "SELECT string_agg(err_msg, ', ') FROM ${table_name}_topo.topo_geom WHERE ${id_column} = ${id} AND err_msg != ''"
 
@@ -77,9 +79,10 @@ else
 
   log "Schreibe Nachbarn von Polygon ${id} in next Tabelle"
   exec_sql "
-    INSERT INTO ${table_name}_topo.next (id)
+    INSERT INTO ${table_name}_topo.next (id, pid)
     SELECT
-      n.gid
+      n.gid,
+      ${pid}
     FROM
       (SELECT * FROM ${schema_name}.${table_name} WHERE ${expression}) n JOIN
       ${schema_name}.${table_name} t ON ST_DWithin(ST_Transform(t.${geom_column}, ${epsg_code}), ST_Transform(n.${geom_column}, ${epsg_code}), 10)

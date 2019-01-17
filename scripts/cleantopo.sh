@@ -16,6 +16,7 @@ only_prepare_topo=${13}
 expression="${14}"
 debug=${15}
 stop_on_error=${16}
+pid=$$
 
 usage() {
   echo "Die in createTopo zur Verfügung stehenden Parameter"
@@ -38,7 +39,7 @@ usage() {
 }
 
 next_id() {
-  exec_sql "SELECT DISTINCT id FROM ${table_name}_topo.next ORDER BY id LIMIT 1"
+  exec_sql "SELECT DISTINCT id, expression FROM ${table_name}_topo.next WHERE pid = ${pid} ORDER BY id LIMIT 1"
   if [ -z ${result} ]; then
     log "Nexttab is leer"
     exec_sql "SELECT ${id_column} FROM ${schema_name}.${table_name} WHERE ${expression} AND ${geom_column}_topo_corrected IS NULL AND ${geom_column}_msg IS NULL ORDER BY ${id_column} LIMIT 1"
