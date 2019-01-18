@@ -25,7 +25,7 @@ log "Add Polygon ${id_column}: ${id} to Topology ${table_name}_topo."
 exec_sql "INSERT INTO ${table_name}_topo.topo_geom (${id_column}, ${geom_column})
 SELECT ${id_column}, gdi_cleanpolygon(${geom_column}, ${epsg_code}, ${distance_tolerance}, ${area_tolerance}) FROM ${schema_name}.${table_name} WHERE ${id_column} = ${id}"
 
-exec_sql "UPDATE ${table_name}_topo.topo_geom SET ${geom_column} = gdi_filterrings(gdi_noseremove('${table_name}_topo', polygon_id, the_geom, ${angle_tolerance}, ${distance_tolerance}, false), ${area_tolerance}) WHERE ${id_column} = ${id}"
+exec_sql "UPDATE ${table_name}_topo.topo_geom SET ${geom_column} = ST_GeometryN(gdi_filterrings(gdi_noseremove('${table_name}_topo', polygon_id, the_geom, ${angle_tolerance}, ${distance_tolerance}, false), ${area_tolerance}), 1) WHERE ${id_column} = ${id}"
 
 exec_sql "SELECT gdi_addtotopo('${table_name}_topo', '${geom_column}', ${topo_tolerance}, ${area_tolerance}, polygon_id, 0, 1, false) FROM ${table_name}_topo.topo_geom WHERE ${id_column} = ${id}"
 

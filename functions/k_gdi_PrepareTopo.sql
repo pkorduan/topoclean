@@ -206,7 +206,7 @@ $BODY$
 
     IF expression_column IS NOT NULL THEN
       IF expression_column NOT IN (id_column, geom_column, 'err_msg') THEN
-        expression_select = expression_column || ',';
+        expression_select = expression_column || ' integer,';
       END IF;
       expression_where = ' WHERE ' || expression;
     END IF;
@@ -227,16 +227,12 @@ $BODY$
     PERFORM gdi_logsql('preparetopo', 'Insert Statistic', sql); EXECUTE sql;
 
     sql = FORMAT ('
-      CREATE UNLOGGED TABLE %1$I.topo_geom AS
-      SELECT
-        %2$I,
+      CREATE UNLOGGED TABLE %1$I.topo_geom (
+        %2$I integer,
         %3$s
-        ST_Transform(%4$I, %7$s) AS the_geom,
-        NULL::text AS err_msg
-      FROM
-        %5$I.%6$I
-      WHERE
-        false
+        %4$I geometry(' || quote_literal('POLYGON') || ', %7$s),
+        err_msg text
+      )
       ',
       topo_name, id_column, expression_select, geom_column, schema_name, table_name, epsg_code
     );
