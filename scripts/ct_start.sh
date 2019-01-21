@@ -76,6 +76,36 @@ else
     ./ct_addpolytotopo.sh $1 $2 $3 $4 $5 $6 $7 $8 $9 ${10} ${11} ${12} ${13} "${14}" ${15} ${16} ${id}
     next_id
   done
+
+	exec_sql "
+		UPDATE
+			${schema_name}.${table_name} AS alt
+	  SET
+    	${geom_column}_topo_corrected = neu.geom
+		FROM
+			(
+				SELECT
+					id,
+					ST_Multi(ST_Union(geom)) AS geom
+				FROM
+					(
+						SELECT
+							${id_column} AS id,
+							topology.ST_GetFaceGeometry(
+								'${table_name}_topo',
+								(topology.GetTopoGeomElements(${geom_column}_topo))[1]
+							) AS geom
+						FROM
+							${table_name}_topo.topo_geom
+						WHERE
+							${expression}
+					) foo
+				GROUP BY
+					id
+			) neu
+		WHERE
+			alt.${id_column} = neu.id
+	"
 fi
 
 log "fertig!"
