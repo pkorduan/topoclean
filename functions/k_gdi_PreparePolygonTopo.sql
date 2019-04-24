@@ -189,6 +189,7 @@ $BODY$
       CREATE UNLOGGED TABLE ' || topo_name || '.removed_nodes (
         node_id integer,
         geom geometry(POINT, ' || epsg_code || '),
+        err_msg text,
         CONSTRAINT removed_nodes_pkey PRIMARY KEY (node_id)
       )
     ';

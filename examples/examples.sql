@@ -50,3 +50,77 @@ nohup ./ct_loop.sh public ortsteile gid the_geom gid 25833 0.3 6 0.3 1 25000 tru
 SELECT sql || ';' FROM sql_logs;
 
 select polygon_id from ortsteile_topo.topo_geom order by polygon_id
+
+----------------------------------------------
+-- Query missing corrected geometries
+SELECT
+  o.gid,
+  t.polygon_id
+FROM
+  ortsteile o JOIN
+  ortsteile_topo.topo_geom t ON o.gid = t.gid
+WHERE
+  o.the_geom_topo_corrected IS NULL;
+
+2323
+2457
+509
+264
+2898
+3832
+3762
+417
+78
+1422
+808
+3774
+2224
+97
+156
+1423
+
+-- Add a single polygon to topology
+SELECT gdi_addToTopo('ortsteile_topo', 'the_geom', 0.1, 1, 1550, 0, 1, true);
+
+-- Equivalent to addToTopo is
+UPDATE ortsteile_topo.topo_geom
+SET the_geom_topo = topology.toTopoGeom(the_geom, 'ortsteile_topo', 1, 0.1)
+WHERE polygon_id = 1550
+SELECT gdi_CleanPolygonTopo('ortsteile_topo', 'ortsteile_topo', 'topo_geom', 'the_geom_topo',1 , 1550, false);
+SELECT gdi_RemoveTopoOverlaps('ortsteile_topo', 'ortsteile_topo', 'topo_geom', 'polygon_id', 'the_geom', 'the_geom_topo');
+SELECT gdi_RemoveNodesBetweenEdges('ortsteile_topo');
+
+-- In both cases do after addToTopo
+SELECT gdi_CloseTopoGaps('ortsteile_topo', 'ortsteile_topo', 'topo_geom', 'the_geom_topo', 17000);
+SELECT gdi_RemoveNodesBetweenEdges('ortsteile_topo', true);
+
+-- and update corrected Geometries
+UPDATE
+  public.ortsteile AS alt
+SET
+  the_geom_topo_corrected = neu.geom
+FROM
+  (
+    SELECT
+      id,
+      ST_Multi(ST_Union(geom)) AS geom
+    FROM
+      (
+        SELECT
+          gid AS id,
+          topology.ST_GetFaceGeometry(
+            'ortsteile_topo',
+            (topology.GetTopoGeomElements(the_geom_topo))[1]
+          ) AS geom
+        FROM
+          ortsteile_topo.topo_geom
+        WHERE
+          true
+      ) foo
+    GROUP BY
+      id
+  ) neu
+WHERE
+  alt.gid = neu.id
+  
+  

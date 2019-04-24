@@ -39,7 +39,7 @@ if [ -n "${result}" ] ; then
   exec_sql "UPDATE ${schema_name}.${table_name} SET ${geom_column}_msg = '${result}' WHERE ${id_column} = ${id}"
 else
   exec_sql "SELECT gdi_CloseTopoGaps('${table_name}_topo', '${table_name}_topo', 'topo_geom', '${geom_column}_topo', ${gap_area_tolerance})"
-  exec_sql "SELECT gdi_RemoveNodesBetweenEdges('${table_name}_topo')"
+  exec_sql "SELECT gdi_RemoveNodesBetweenEdges('${table_name}_topo', true)"
 
   log "Polygon mit ${id_column}: ${id} erfolgreich zur Topologie hinzugefügt."
   exec_sql "UPDATE ${schema_name}.${table_name} SET ${geom_column}_msg = 'ok' WHERE ${id_column} = ${id}"
