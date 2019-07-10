@@ -146,20 +146,6 @@ AS $BODY$
       RAISE EXCEPTION 'Die Geometriespalte % existiert nicht in Tabelle %.%!', child_geom, child_schema, child_table;
     END IF;
 
-    -- Prüfen ob es schon child_korr gibt.
-    sql = format('
-      SELECT 1 FROM information_schema.columns
-      WHERE
-        table_schema = %1$L AND
-        table_name = %2$L AND
-        column_name = %3$L
-    ', child_schema, child_table, child_korr);
-    IF debug THEN RAISE NOTICE 'Abfrage ob Geometriespalte für korrigierte Geometrien existiert: %', sql; END IF;
-    EXECUTE sql INTO result;
-    IF result IS NOT NULL THEN
-      RAISE EXCEPTION 'Die Geometriespalte existiert schon in Tabelle %.%!', child_korr, child_schema, child_table;
-    END IF;
-
     -- srid der parent geom abfragen
     sql = Format('
         SELECT
@@ -327,7 +313,7 @@ AS $BODY$
   END;
 $BODY$;
 
-/*
+
 -- Beispielabfrage
 
 SELECT gdi_SnapToParentOutline(
@@ -341,7 +327,7 @@ SELECT gdi_SnapToParentOutline(
   'gvb_schl',
   'geom'
 );
-
+/*
     -- Codesnipsel
 
     -- Anlegen einer Geometriespalte für die Linien der aggregierten beschnittenen Flächen. (child_agg_line)
