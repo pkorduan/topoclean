@@ -1,6 +1,6 @@
 -- FUNCTION: public.gdi_snaptoparentoutline(character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying)
 
--- DROP FUNCTION public.gdi_snaptoparentoutline(character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying);
+DROP FUNCTION public.gdi_snaptoparentoutline(character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying);
 
 CREATE OR REPLACE FUNCTION public.gdi_snaptoparentoutline(
 	child_schema character varying,
@@ -10,7 +10,7 @@ CREATE OR REPLACE FUNCTION public.gdi_snaptoparentoutline(
 	child_geom character varying,
 	parent_schema character varying,
 	parent_table character varying,
-	parent_fk character varying,
+	parent_pk character varying,
 	parent_geom character varying)
 RETURNS boolean
     LANGUAGE 'plpgsql'
@@ -25,15 +25,16 @@ AS $BODY$
     result RECORD;
     parent_table_poly character varying = parent_table || '_poly';
     gaps_table character varying = parent_table || '_' || child_table || '_gaps';
-    overlaps_table character varying = parent_table || '_' || child_table || '_overlaps';
+		gap_poly_n character varying = 'gap_poly_n';
+		overlaps_table character varying = parent_table || '_' || child_table || '_overlaps';
     parent_poly character varying = parent_geom || '_poly';
     parent_poly_n character varying = parent_poly || '_n';
     parent_line character varying = parent_geom || '_line';
-    child_agg_line character varying = child_geom || '_child_agg_line';
+		child_agg_line character varying = child_geom || '_child_agg_line';
     child_cut character varying = child_geom || '_cut';
     child_korr character varying = child_geom || '_korr';
   BEGIN
-    -- Prüfen ob es parent_schema, parent_table, parent_fk und parent_geom gibt
+    -- Prüfen ob es parent_schema, parent_table, parent_pk und parent_geom gibt
     sql = format('
       SELECT 1 FROM information_schema.schemata
       WHERE
@@ -63,11 +64,11 @@ AS $BODY$
         table_schema = %1$L AND
         table_name = %2$L AND
         column_name = %3$L
-    ', parent_schema, parent_table, parent_fk);
+    ', parent_schema, parent_table, parent_pk);
     IF debug THEN RAISE NOTICE 'Abfrage ob Attributspalte existiert: %', sql; END IF;
     EXECUTE sql INTO result;
     IF result IS NULL THEN
-      RAISE EXCEPTION 'Die Attributspalte % existiert nicht in Tabelle %.%!', parent_fk, parent_schema, parent_table;
+      RAISE EXCEPTION 'Die Attributspalte % existiert nicht in Tabelle %.%!', parent_pk, parent_schema, parent_table;
     END IF;
 
     sql = format('
@@ -171,23 +172,28 @@ AS $BODY$
     EXECUTE sql INTO child_srid;
 
     -- Anlegen einer Tabelle für die Polygone der Multipolygone der Parent-Tabelle
+		-- PK ist parent_pk und parent_poly_n aus path
     sql = Format('
         DROP TABLE IF EXISTS %1$I.%3$I;
         CREATE TABLE %1$I.%3$I AS
         SELECT
             %4$I,
-           ST_Transform(                (ST_Dump(%5$I)).geom , %9$s)::geometry(''POLYGON'', %9$s) AS %6$I,
-           ST_Transform(ST_ExteriorRing((ST_Dump(%5$I)).geom), %9$s)::geometry(''LINESTRING'', %9$s) AS %8$I,
-           (ST_Dump(%5$I)).path[1] AS %7$I
+           (ST_Dump(%5$I)).path[1] AS %7$I,
+					 ST_Transform(                (ST_Dump(%5$I)).geom , %9$s)::geometry(''POLYGON'', %9$s) AS %6$I,
+           ST_Transform(ST_ExteriorRing((ST_Dump(%5$I)).geom), %9$s)::geometry(''LINESTRING'', %9$s) AS %8$I
         FROM
            %1$I.%2$I;
-        CREATE INDEX %3$s_%6$s_gist ON %1$I.%3$I USING GIST (%6$I);
+				ALTER TABLE %1$I.%3$I ADD CONSTRAINT %3$s_pkey PRIMARY KEY (%4$I, %7$I);
+				CREATE INDEX %3$s_%6$s_gist ON %1$I.%3$I USING GIST (%6$I);
         CREATE INDEX %3$s_%8$s_gist ON %1$I.%3$I USING GIST (%8$I);
-     ', parent_schema, parent_table, parent_table_poly, parent_fk, parent_geom, parent_poly, parent_poly_n, parent_line, child_srid
+     ', parent_schema, parent_table, parent_table_poly, parent_pk, parent_geom, parent_poly, parent_poly_n, parent_line, child_srid
     );
-    -- 1 parent_schema, 2 parent_table, 3 parent_table_poly, 4 parent_fk, 5 parent_geom, 6 parent_poly, 7 parent_poly_n, 8 parent_line, 9 child_srid
+    -- 1 parent_schema, 2 parent_table, 3 parent_table_poly, 4 parent_pk, 5 parent_geom, 6 parent_poly, 7 parent_poly_n, 8 parent_line, 9 child_srid
     RAISE NOTICE 'SQL zum Anlegen einer Tabelle, die die Einzelpolygone und Outlines der festen Flächen beinhalen soll: %', sql;
     EXECUTE sql;
+
+		-- Zuordnung der festen Polygone zu den variablen-Flächen. Jedes child-Fläche gehört zu genau einem Polygon
+		-- Das Polygon ist mit dem parent_pk und 
 
     -- Anlegen der Spalten für die verschnittene und korrigierte Geometrie der variablen Flächen in der Child Tabelle
     sql = Format('
@@ -212,10 +218,10 @@ AS $BODY$
         WHERE
           p.%3$I = c.%7$I
       ',
-      parent_schema, parent_table, parent_fk, parent_geom,
+      parent_schema, parent_table, parent_pk, parent_geom,
       child_schema, child_table, child_fk, child_geom, child_cut, child_korr
     );
-    -- 1 parent_schema, 2 parent_table, 3 parent_fk, 4 parent_geom, 5 child_schema, 6 child_table, 7 child_fk, 8 child_geom, 9 child_cut, 10 child_korr
+    -- 1 parent_schema, 2 parent_table, 3 parent_pk, 4 parent_geom, 5 child_schema, 6 child_table, 7 child_fk, 8 child_geom, 9 child_cut, 10 child_korr
     EXECUTE sql;
 
     -- Anlegen einer Tabelle für die Stücke der childs, die über die parents hinausragen
@@ -230,28 +236,37 @@ AS $BODY$
            %1$I.%2$I p JOIN
            %5$I.%6$I c ON p.%3$I = c.%7$I;
         CREATE INDEX %9$s_geom_gist ON %1$I.%9$I USING GIST (geom);
-     ', parent_schema, parent_table, parent_fk, parent_geom, child_schema, child_table, child_fk, child_geom, overlaps_table, child_srid
+     ', parent_schema, parent_table, parent_pk, parent_geom, child_schema, child_table, child_fk, child_geom, overlaps_table, child_srid
     );
-    -- 1 parent_schema, 2 parent_table, 3 parent_fk, 4 parent_geom, 5 child_schema, 6 child_table, 7 child_fk, 8 child_geom, 9 overlaps_table, 10 child_srid
+    -- 1 parent_schema, 2 parent_table, 3 parent_pk, 4 parent_geom, 5 child_schema, 6 child_table, 7 child_fk, 8 child_geom, 9 overlaps_table, 10 child_srid
     RAISE NOTICE 'SQL zum Anlegen einer Tabelle, die die Lücken zwischen Parent und Childs enthält: %', sql;
     EXECUTE sql;
 
-    -- Anlegen einer Tabelle für die Lücken zwischen childs und parents
+    -- Anlegen einer Tabelle für die Lücken zwischen childs und parent polygonen
+		-- Der pkey besteht aus der parent_pk, parent_poly_n und gap_poly_n ... Nummer der Polygone der berechneten Lücke pro parent polygon
     sql = Format('
-        DROP TABLE IF EXISTS %1$I.%9$I;
-        CREATE TABLE %1$I.%9$I AS
-        SELECT
-           p.%3$I,
-           generate_series(1, ST_NumGeometries(ST_Difference(p.%4$I, ST_Collect(c.%8$I)))) AS n,
-           (ST_Dump(ST_Difference(p.%4$I, ST_Collect(c.%8$I)))).geom::geometry(''Polygon'', %10$s) AS geom
-        FROM
-           %1$I.%2$I p JOIN
-           %5$I.%6$I c ON p.%3$I = c.%7$I
-        GROUP BY p.%3$I;
-        CREATE INDEX %9$s_geom_gist ON %1$I.%9$I USING GIST (geom);
-     ', parent_schema, parent_table, parent_fk, parent_geom, child_schema, child_table, child_fk, child_cut, gaps_table, child_srid
+        DROP TABLE IF EXISTS %1$I.%10$I;
+        CREATE TABLE %1$I.%10$I AS
+			  SELECT
+           %3$I,
+					 %5$I,
+					(ST_Dump(diff)).path[1] AS %12$I,
+					(ST_Dump(diff)).geom::geometry(''Polygon'', %11$s) geom					 
+				FROM
+			    (
+					  SELECT
+            	p.%3$I,
+					  	p.%5$I,
+							ST_Difference(p.%4$I, ST_Collect(c.%9$I)) diff
+        		FROM
+          		%1$I.%2$I p JOIN
+          		%6$I.%7$I c ON p.%3$I = c.%8$I
+        		GROUP BY p.%3$I, p.%5$I
+					) diff_tab;
+        CREATE INDEX %10$s_geom_gist ON %1$I.%10$I USING GIST (geom);
+     ', parent_schema, parent_table_poly, parent_pk, parent_poly, parent_poly_n, child_schema, child_table, child_fk, child_cut, gaps_table, child_srid, gap_poly_n
     );
-    -- 1 parent_schema, 2 parent_table, 3 parent_fk, 4 parent_geom, 5 child_schema, 6 child_table, 7 child_fk, 8 child_cut, 9 gaps_table, 10 child_srid 
+    -- 1 parent_schema, 2 parent_table, 3 parent_pk, 4 parent_geom, 5 parent_poly_n, 6 child_schema, 7 child_table, 8 child_fk, 9 child_cut, 10 gaps_table, 11 child_srid, 12 gap_poly_n 
     RAISE NOTICE 'SQL zum Anlegen einer Tabelle, die die Lücken zwischen Parent und Childs enthält: %', sql;
     EXECUTE sql;
 
@@ -275,13 +290,18 @@ AS $BODY$
           ) sub
         WHERE
           c.%9$I = sub.%9$I
-      ', parent_schema, gaps_table, parent_fk, child_schema, child_table, child_fk, child_cut, child_korr, child_pk
+      ', parent_schema, gaps_table, parent_pk, child_schema, child_table, child_fk, child_cut, child_korr, child_pk
     );
     RAISE NOTICE 'SQL zur Berechnung der korrigierten Child Geometrie: %', sql;
-    -- 1 parent_schema, 2 gaps_table, 3 parent_fk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_cut, 8 child_korr, 9 child_pk
+    -- 1 parent_schema, 2 gaps_table, 3 parent_pk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_cut, 8 child_korr, 9 child_pk
     EXECUTE sql;
 
     /*
+    Die Aufteilung der Lücken, die an mehreren Child-Flächen angrenzen geht nicht über die outline Start und Endpoints, weil die outlines merkwürdigerweise manchmal MultiLineStrings sind, die sich nicht zu einer gerichteten Linie mit Anfang und Ende zusammenfügen lassen.
+    Neuer Ansatz daher:
+    - Verschneidung jweils aller angrenzender Nachbarn mit der Lücke. Übrig bleiben dürften die Punkte zwischen benachbarter Nachbarn auf der Linie an der Lücke.
+    - Lotfusspunkte auf die Außenlinie des Polygons und Linien dahin bilden und mit der Lücke verschneiden. Die Teile dem Nachbarn zuordnen zu dem die längste Touch-linie liegt (eigentlich zu dem die einzige Intersects linie liegt, aber da bei Touch wohl wieder nicht nur der eine Nachbar gefunden wird nimm den mit der längsten Linie. Die Verschneidung mit den anderen Nachbarn dürften nur Punkte ergeben.)
+
     -- Fälle die Lotsenkrechten der outlines von Lücken, die an mehr als einer Child-Fläche grenzen auf die parent geom
     -- ToDo: Hier nur die bearbeiten, die an mehr als einer Child-Fläche anliegen
     sql = Format('
@@ -364,9 +384,9 @@ SELECT gdi_SnapToParentOutline(
           ) AS child
         WHERE
           parent.%3$s = child.%6$s
-      ', parent_schema, parent_table_poly, parent_fk, child_schema, child_table, child_fk, child_cut, child_agg_line
+      ', parent_schema, parent_table_poly, parent_pk, child_schema, child_table, child_fk, child_cut, child_agg_line
     );
-    -- parent_schema, 2 parent_table_poly, 3 parent_fk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_cut, 8 child_agg_line
+    -- parent_schema, 2 parent_table_poly, 3 parent_pk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_cut, 8 child_agg_line
     EXECUTE sql;
 
     -- Lege neue Spalte in der Child-Tabelle an für die äußeren Linien, die auf dem Aggregat liegen
@@ -378,7 +398,7 @@ SELECT gdi_SnapToParentOutline(
     );
     EXECUTE sql;
 
-    -- Bestimmung der äußeren Linien der Child Flächen durch Verschneidung der Child-Flächen mit den Überlappuntsflächen
+    -- Bestimmung der äußeren Linien der Child Flächen durch Verschneidung der Child-Flächen mit den Überlappungsflächen
     sql = FORMAT('
         UPDATE
           %4$s.%5$s AS c
@@ -389,9 +409,9 @@ SELECT gdi_SnapToParentOutline(
         WHERE
           o.parent_%3$s = c.%6$I AND
           ST_Touches(o.geom, c.%7$I)                 
-      ', parent_schema, overlaps_table, parent_fk, child_schema, child_table, child_fk, child_cut
+      ', parent_schema, overlaps_table, parent_pk, child_schema, child_table, child_fk, child_cut
     );
-    -- 1 parent_schema, 2 overlaps_table, 3 parent_fk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_cut
+    -- 1 parent_schema, 2 overlaps_table, 3 parent_pk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_cut
     RAISE NOTICE 'sql %', sql;
     EXECUTE sql;    
 
@@ -406,9 +426,9 @@ SELECT gdi_SnapToParentOutline(
         WHERE
           ST_Intersects(c.%7$s, p.%8$I) AND
           p.%3$s = c.%6$s
-      ', parent_schema, parent_table_poly, parent_fk, child_schema, child_table, child_fk, child_cut, child_agg_line
+      ', parent_schema, parent_table_poly, parent_pk, child_schema, child_table, child_fk, child_cut, child_agg_line
     );
-    -- 1  parent_schema, 2 parent_table, 3 parent_fk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_geom, 8 child_agg_line
+    -- 1  parent_schema, 2 parent_table, 3 parent_pk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_geom, 8 child_agg_line
     RAISE NOTICE 'sql %', sql;
     EXECUTE sql;
 */
