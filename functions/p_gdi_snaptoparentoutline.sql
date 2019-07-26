@@ -1,5 +1,3 @@
--- FUNCTION: public.gdi_snaptoparentoutline(character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying)
-
 DROP FUNCTION public.gdi_snaptoparentoutline(character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying, character varying);
 
 CREATE OR REPLACE FUNCTION public.gdi_snaptoparentoutline(
@@ -272,12 +270,88 @@ AS $BODY$
 
     -- Verschmelze die beschnittenen Child-Flächen mit den Lücken, die nur an einem Child anliegen und update die Spalte der korrigierten Geometrien
     sql = Format('
-        UPDATE
-          %4$I.%5$I c
-        SET
-          %8$I = sub.%8$I
-        FROM
-          (
+				UPDATE
+					%5$I.%6$I c
+				SET
+					%9$I = ST_Multi(ST_Union(c.%8$I, gaps.geom))
+				FROM
+					(
+						SELECT
+							%3$I,
+							%10$I,
+							ST_CollectionExtract(ST_Union(foo.geom), 3) geom
+						FROM
+							(
+								SELECT
+									g.%3$I,
+									g.%4$I,
+									c.%10$I,
+									count(*) OVER (PARTITION BY g.%3$I, g.%4$I, g.%11$I) AS num,
+									g.geom
+								FROM
+									%1$I.%2$I AS g JOIN
+									%1$I.%6$I AS c ON (g.%3$I = c.%3$I AND ST_Touches(g.geom, c.%8$I))
+							) foo
+						WHERE
+							num = 1
+						GROUP BY
+							%3$I,
+							%10$I
+					) AS gaps
+				WHERE
+					c.%3$I = gaps.%3$I AND
+					c.%10$I = gaps.%10$I
+      ', parent_schema, gaps_table, parent_pk, parent_poly_n, child_schema, child_table, child_fk, child_cut, child_korr, child_pk, gap_poly_n
+    );
+    RAISE NOTICE 'SQL zur Berechnung der korrigierten Child Geometrie: %', sql;
+    -- 1 parent_schema, 2 gaps_table, 3 parent_pk, 4 parent_poly_n, 5 child_schema, 6 child_table, 7 child_fk, 8 child_cut, 9 child_korr, 10 child_pk, 11 gap_poly_n
+    EXECUTE sql;
+
+    /*
+    Die Aufteilung der Lücken, die an mehreren Child-Flächen angrenzen geht nicht über die outline Start und Endpoints, weil die outlines merkwürdigerweise manchmal MultiLineStrings sind, die sich nicht zu einer gerichteten Linie mit Anfang und Ende zusammenfügen lassen.
+    Neuer Ansatz daher:
+    - Verschneidung jweils aller angrenzender Nachbarn mit der Lücke. Übrig bleiben dürften die Punkte zwischen benachbarter Nachbarn auf der Linie an der Lücke.
+    - Lotfusspunkte auf die Außenlinie des Polygons und Linien dahin bilden und mit der Lücke verschneiden. Die Teile dem Nachbarn zuordnen zu dem die längste Touch-linie liegt (eigentlich zu dem die einzige Intersects linie liegt, aber da bei Touch wohl wieder nicht nur der eine Nachbar gefunden wird nimm den mit der längsten Linie. Die Verschneidung mit den anderen Nachbarn dürften nur Punkte ergeben.)
+
+SELECT
+  gvb_schl,
+	geom_poly_n,
+	gap_poly_n,
+  geom,
+	gdi_intersections(geom_cut, geom_cut_arr, geom)
+FROM
+	(
+		SELECT
+			g.gvb_schl,
+			g.geom_poly_n,
+			g.gap_poly_n,
+			c.gtl_schl,
+			c.geom_cut,
+--			(ST_Dump(ST_Intersection(g.geom, gdi_intersections(c.geom_cut) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n)))).geom AS geom_i,
+			array_agg(c.geom_cut) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n) AS geom_cut_arr,
+			g.geom,
+		  count(*) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n) AS num--,
+--			ST_MakeLine(
+--				(ST_Dump(ST_Intersection(g.geom, gdi_intersections(c.geom_cut) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n)))).geom,
+--				ST_LineInterpolatePoint(p.geom_line, ST_LineLocatePoint(p.geom_line, (ST_Dump(ST_Intersection(g.geom, gdi_intersections(c.geom_cut) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n)))).geom))
+--			) cut_geom
+
+		FROM
+			public.gemeindeverbaende_mv_ortsteile_hro_gaps AS g JOIN
+			public.ortsteile_hro AS c ON (g.gvb_schl = c.gvb_schl AND ST_Touches(g.geom, c.geom_cut)) JOIN
+			public.gemeindeverbaende_mv_poly AS p ON (g.gvb_schl = p.gvb_schl AND g.geom_poly_n = p.geom_poly_n)
+		ORDER BY
+			g.gvb_schl,
+			g.geom_poly_n,
+			g.gap_poly_n,
+			c.gtl_schl
+) foo
+WHERE
+  array_length(geom_cut_arr, 1) > 1
+GROUP BY gvb_schl, geom_poly_n, gap_poly_n, geom
+	
+
+		sql = Format('
             SELECT
               c.%9$I,
               ST_Multi(ST_Union(c.%7$I, ST_CollectionExtract(ST_Union(g.geom), 3))) AS %8$I
@@ -295,13 +369,7 @@ AS $BODY$
     RAISE NOTICE 'SQL zur Berechnung der korrigierten Child Geometrie: %', sql;
     -- 1 parent_schema, 2 gaps_table, 3 parent_pk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_cut, 8 child_korr, 9 child_pk
     EXECUTE sql;
-
-    /*
-    Die Aufteilung der Lücken, die an mehreren Child-Flächen angrenzen geht nicht über die outline Start und Endpoints, weil die outlines merkwürdigerweise manchmal MultiLineStrings sind, die sich nicht zu einer gerichteten Linie mit Anfang und Ende zusammenfügen lassen.
-    Neuer Ansatz daher:
-    - Verschneidung jweils aller angrenzender Nachbarn mit der Lücke. Übrig bleiben dürften die Punkte zwischen benachbarter Nachbarn auf der Linie an der Lücke.
-    - Lotfusspunkte auf die Außenlinie des Polygons und Linien dahin bilden und mit der Lücke verschneiden. Die Teile dem Nachbarn zuordnen zu dem die längste Touch-linie liegt (eigentlich zu dem die einzige Intersects linie liegt, aber da bei Touch wohl wieder nicht nur der eine Nachbar gefunden wird nimm den mit der längsten Linie. Die Verschneidung mit den anderen Nachbarn dürften nur Punkte ergeben.)
-
+	
     -- Fälle die Lotsenkrechten der outlines von Lücken, die an mehr als einer Child-Fläche grenzen auf die parent geom
     -- ToDo: Hier nur die bearbeiten, die an mehr als einer Child-Fläche anliegen
     sql = Format('
@@ -431,5 +499,73 @@ SELECT gdi_SnapToParentOutline(
     -- 1  parent_schema, 2 parent_table, 3 parent_pk, 4 child_schema, 5 child_table, 6 child_fk, 7 child_geom, 8 child_agg_line
     RAISE NOTICE 'sql %', sql;
     EXECUTE sql;
+
+BEGIN;
+
+CREATE FUNCTION sum_product_fn(int,int,int) RETURNS int AS $$
+    SELECT $1 + ($2 * $3);
+$$ LANGUAGE SQL;           
+
+CREATE AGGREGATE sum_product(int, int) (
+    sfunc = sum_product_fn,
+    stype = int, 
+    initcond = 0
+);
+
+SELECT 
+    sum(i) AS one,     
+    sum_product(i, 2) AS double,
+    sum_product(i,3) AS triple
+FROM generate_series(1,3) i;
+
+ROLLBACK; 
+
+
+SELECT
+	*
+FROM
+	(
+		SELECT
+			g.gvb_schl,
+			g.geom_poly_n,
+			g.gap_poly_n,
+			c.gtl_schl,
+			ST_GeometryType(ST_Intersection(g.geom, c.geom_cut)),
+			count(*) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n) AS num
+/*
+					(ST_Dump(ST_Intersection(g.geom, gdi_intersections(c.geom_cut) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n)))).geom AS geom_i,
+		ST_MakeLine(
+				(ST_Dump(ST_Intersection(g.geom, gdi_intersections(c.geom_cut) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n)))).geom,
+				ST_LineInterpolatePoint(p.geom_line, ST_LineLocatePoint(p.geom_line, (ST_Dump(ST_Intersection(g.geom, gdi_intersections(c.geom_cut) OVER (PARTITION BY g.gvb_schl, g.geom_poly_n, g.gap_poly_n)))).geom))
+			) cut_geom*/
+		FROM
+			public.gemeindeverbaende_mv_ortsteile_hro_gaps AS g JOIN
+			public.ortsteile_hro AS c ON (g.gvb_schl = c.gvb_schl AND ST_Touches(g.geom, c.geom_cut)) JOIN
+			public.gemeindeverbaende_mv_poly AS p ON (g.gvb_schl = p.gvb_schl AND g.geom_poly_n = p.geom_poly_n)
+		ORDER BY
+			g.gvb_schl,
+			g.geom_poly_n,
+			g.gap_poly_n,
+			c.gtl_schl
+) foo
+WHERE
+  geom_poly_n = 1 AND
+	gap_poly_n = 702 AND
+  num > 1
+	
+	-- Liefert die Punkte an Schnittpunkten von Nachbarn und Gap, wenn die geoms der beteiligten Nachbarn in child_geoms[] stecken.
+				SELECT DISTINCT
+					ST_Intersection(ST_Intersection(a.geom, b.geom), gap_geom)
+				FROM
+					unnest(child_geoms) AS child_geoms(geom) AS a,
+					unnest(child_geoms) AS child_geoms(geom) AS b
+				WHERE
+					a.geom != b.geom AND
+					ST_Touches(a.geom, b.geom)
+
+  -- Gapzuordnung in 2 läufen.
+	-- 1. Schnittpunkte finden und gap zerteilen
+	-- 2. Zuordnen der Teile zu den child-Flächen über touches oder intersection typ line
+
 */
 
