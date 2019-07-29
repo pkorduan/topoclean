@@ -122,5 +122,17 @@ FROM
   ) neu
 WHERE
   alt.gid = neu.id
+	
+SELECT gdi_SnapToParentOutline(
+  'public',
+  'ortsteile_hro',
+  'gtl_schl',
+  'gvb_schl',
+  'geom',
+  'public',
+  'gemeindeverbaende_mv',
+  'gvb_schl',
+  'geom'
+);
   
   
