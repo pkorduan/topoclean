@@ -39,6 +39,12 @@ see in sub directory examples
 ## gdi_SnapToParentOutline
 Clip overlapping areas and fill gaps of subordinated polygons.
 
+### Requirements
+The function gdi_SnapToParentOutline requires the following other functions, which must created befor running this function.
+* gdi_intersections
+* gdi_extendline
+* gdi_split_multi
+
 ### Usage
 It takes the following arguments
 * child_schema character varying, Schema name of the subordniated table.
